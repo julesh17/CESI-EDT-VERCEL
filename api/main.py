@@ -425,7 +425,7 @@ async def logout(request: Request):
 async def create_calendar(request: Request, promo_name: str = Form(...), school_year: str = Form(...)):
     if not get_current_user(request): return RedirectResponse("/login")
     
-    slug = f"{promo_name}-{school_year}".lower().replace(" ", "-")
+    slug = f"{promo_name}-{school_year}".upper().replace(" ", "-")
     data = {"slug": slug, "name": promo_name, "year": school_year}
     try:
         supabase.table("plannings").insert(data).execute()
@@ -446,7 +446,7 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     supabase.table("plannings").update({
         "events_p1": events_p1,
         "events_p2": events_p2,
-        "updated_at": datetime.now().isoformat()
+        "updated_at": datetime.now(pytz.timezone('Europe/Paris')).isoformat()
     }).eq("slug", slug).execute()
     
     return RedirectResponse("/", status_code=303)
