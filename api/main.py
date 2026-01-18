@@ -34,7 +34,11 @@ SUPABASE_KEY = "sb_publishable_mgjSTslsZ_ObnIRxCL10AQ_ix5NSBpz"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+#templates = Jinja2Templates(directory="templates")
+
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # Sécurité pour les cookies de session (impératif pour la connexion)
 app.add_middleware(SessionMiddleware, secret_key="SECRET_ALEATOIRE_A_CHANGER_SI_TU_VEUX")
