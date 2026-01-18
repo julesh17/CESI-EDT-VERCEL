@@ -2,54 +2,160 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Connexion Planning</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connexion | EDT CESI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background-color: #e9ecef; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        .card { width: 100%; max-width: 400px; }
+        :root {
+            --bg-color: #f5f5f7;
+            --accent-color: #0071e3;
+            --text-color: #1d1d1f;
+        }
+        body {
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        /* Cercle de fond décoratif flou */
+        .ambient-light {
+            position: absolute;
+            top: -10%;
+            left: -10%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(circle, rgba(0,113,227,0.15) 0%, rgba(255,255,255,0) 70%);
+            filter: blur(60px);
+            z-index: -1;
+            animation: float 10s infinite ease-in-out;
+        }
+
+        .card-login {
+            border: none;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 420px;
+            padding: 3rem;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUpFade 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        .logo-img {
+            height: 60px;
+            object-fit: contain;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-control {
+            border-radius: 12px;
+            padding: 12px 15px;
+            border: 1px solid #d2d2d7;
+            background-color: #fff;
+            font-size: 15px;
+            transition: all 0.2s ease;
+        }
+        .form-control:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(0,113,227, 0.15);
+        }
+
+        .btn-apple {
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 500;
+            font-size: 16px;
+            border: none;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .btn-apple:hover {
+            background-color: #0077ED;
+            transform: scale(1.02);
+        }
+        .btn-apple:active {
+            transform: scale(0.98);
+        }
+
+        .link-secondary {
+            color: #86868b;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        .link-secondary:hover {
+            color: var(--accent-color);
+        }
+
+        @keyframes slideUpFade {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(20px, 40px); }
+        }
     </style>
 </head>
 <body>
-    <div class="card shadow">
-        <div class="card-body p-4">
-            <h3 class="text-center mb-4">
+    <div class="ambient-light"></div>
+
+    <div class="card-login">
+        <div class="text-center">
+            <img src="/cesi.png" alt="Logo CESI" class="logo-img">
+            <h4 class="fw-bold mb-4" style="letter-spacing: -0.5px;">
                 {% if mode == 'login' %}Connexion{% else %}Créer un compte{% endif %}
-            </h3>
+            </h4>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger rounded-3 border-0 bg-danger-subtle text-danger small mb-4">
+            <i class="bi bi-exclamation-circle-fill me-2"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label small text-muted fw-bold ms-1">UTILISATEUR</label>
+                <input type="text" name="username" class="form-control" placeholder="Votre pseudo" required>
+            </div>
             
-            {% if error %}
-            <div class="alert alert-danger">{{ error }}</div>
+            <div class="mb-3">
+                <label class="form-label small text-muted fw-bold ms-1">MOT DE PASSE</label>
+                <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+            </div>
+
+            {% if mode == 'register' %}
+            <div class="mb-4">
+                <label class="form-label small text-muted fw-bold ms-1">CODE SECRETAIRE</label>
+                <input type="text" name="verification" class="form-control" placeholder="Code secret..." required>
+            </div>
             {% endif %}
 
-            <form method="post">
-                <div class="mb-3">
-                    <label class="form-label">Pseudo</label>
-                    <input type="text" name="username" class="form-control" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Mot de passe</label>
-                    <input type="password" name="password" class="form-control" required>
-                </div>
-                
-                {% if mode == 'register' %}
-                <div class="mb-3">
-                    <label class="form-label">Code de vérification</label>
-                    <input type="text" name="verification" class="form-control" placeholder="Code secret..." required>
-                </div>
-                {% endif %}
+            <button type="submit" class="btn btn-apple w-100 mt-2">
+                {% if mode == 'login' %}Se connecter <i class="bi bi-arrow-right-short"></i>{% else %}S'inscrire{% endif %}
+            </button>
+        </form>
 
-                <button type="submit" class="btn btn-primary w-100">
-                    {% if mode == 'login' %}Se connecter{% else %}S'inscrire{% endif %}
-                </button>
-            </form>
-            
-            <div class="text-center mt-3">
-                {% if mode == 'login' %}
-                    <a href="/register">Je n'ai pas de compte (Créer)</a>
-                {% else %}
-                    <a href="/login">J'ai déjà un compte (Connexion)</a>
-                {% endif %}
-            </div>
+        <div class="text-center mt-4 pt-3 border-top">
+            {% if mode == 'login' %}
+                <span class="text-muted small">Nouveau ici ?</span> 
+                <a href="/register" class="link-secondary fw-bold ms-1">Créer un compte</a>
+            {% else %}
+                <span class="text-muted small">Déjà un compte ?</span> 
+                <a href="/login" class="link-secondary fw-bold ms-1">Se connecter</a>
+            {% endif %}
         </div>
     </div>
+
 </body>
 </html>
