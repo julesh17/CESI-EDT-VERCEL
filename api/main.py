@@ -14,15 +14,11 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from supabase import create_client, Client
 
-from fastapi.staticfiles import StaticFiles
-
 # --- BIBLIOTHEQUES ANALYSE EXCEL ---
 import pandas as pd
 import pytz
 from dateutil import parser as dtparser
 from openpyxl import load_workbook
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ==========================================
 # 1. CONFIGURATION
