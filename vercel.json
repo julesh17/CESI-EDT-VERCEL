@@ -7,30 +7,6 @@
   ],
   "routes": [
     {
-      "src": "/ics/(.*)",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/login",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/register",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/create",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/upload/(.*)",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/logout",
-      "dest": "api/main.py"
-    },
-    {
       "src": "/(.*)",
       "dest": "api/main.py"
     }
