@@ -19,22 +19,28 @@ from starlette.middleware.sessions import SessionMiddleware
 from supabase import create_client, Client
 
 # =====================================================
-# CONFIG
+# CONFIG & LOGGING
 # =====================================================
+
+# Fonction simple pour voir les traces dans Vercel
+def log_msg(msg: str):
+    print(f"[LOG VERCEL] {msg}")
 
 SUPABASE_URL = "https://dlxqgelylxcakrmbkyun.supabase.co"
 SUPABASE_KEY = "sb_publishable_mgjSTslsZ_ObnIRxCL10AQ_ix5NSBpz"
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    log_msg("Supabase client initialized successfully")
+except Exception as e:
+    log_msg(f"Error initializing Supabase: {e}")
 
-#app = FastAPI(root_path="/api" if os.environ.get("VERCEL") else "")
 app = FastAPI()
 
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-templates = Jinja2Templates(
-    directory=os.path.join(os.path.dirname(BASE_DIR), "templates")
-)
+# Note: Sur Vercel, la structure des dossiers peut varier, on assure le coup
+TEMPLATE_DIR = os.path.join(os.path.dirname(BASE_DIR), "templates")
+templates = Jinja2Templates(directory=TEMPLATE_DIR)
 
 app.add_middleware(
     SessionMiddleware,
@@ -44,7 +50,7 @@ app.add_middleware(
 )
 
 # =====================================================
-# HELPERS URL
+# HELPERS
 # =====================================================
 
 def url_for(request: Request, path: str) -> str:
@@ -57,7 +63,7 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 # =====================================================
-# PARSING EXCEL (INCHANGÉ LOGIQUE)
+# PARSING EXCEL
 # =====================================================
 
 def normalize_group_label(x):
@@ -101,11 +107,12 @@ def parse_sheet_to_events(content, sheet):
     file_io = io.BytesIO(content)
     try:
         df = pd.read_excel(file_io, sheet_name=sheet, header=None)
-    except Exception:
+    except Exception as e:
+        log_msg(f"Erreur lecture Excel sheet {sheet}: {e}")
         return []
 
     file_io.seek(0)
-    merged_map = get_merged_map(file_io, sheet)
+    # merged_map = get_merged_map(file_io, sheet) # Non utilisé pour l'instant
     events = []
 
     for r in range(len(df)):
@@ -129,11 +136,12 @@ def parse_sheet_to_events(content, sheet):
                 "description": "",
                 "groups": []
             })
-
+    
+    log_msg(f"Sheet {sheet}: {len(events)} events found")
     return events
 
 # =====================================================
-# ICS
+# ICS BUILDER
 # =====================================================
 
 def build_vtimezone():
@@ -191,7 +199,6 @@ async def home(request: Request):
         return RedirectResponse(url_for(request, "/login"), 303)
 
     plannings = supabase.table("plannings").select("*").execute().data
-
     return templates.TemplateResponse("index.html", {
         "request": request,
         "plannings": plannings
@@ -227,11 +234,15 @@ async def create_calendar(request: Request, promo_name: str = Form(...), school_
         return RedirectResponse(url_for(request, "/login"), 303)
 
     slug = f"{promo_name}-{school_year}".upper().replace(" ", "-")
-    supabase.table("plannings").upsert({
-        "slug": slug,
-        "name": promo_name,
-        "year": school_year
-    }).execute()
+    try:
+        supabase.table("plannings").upsert({
+            "slug": slug,
+            "name": promo_name,
+            "year": school_year
+        }).execute()
+        log_msg(f"Created/Updated planning: {slug}")
+    except Exception as e:
+        log_msg(f"Error creating planning: {e}")
 
     return RedirectResponse(url_for(request, "/"), 303)
 
@@ -241,38 +252,75 @@ async def upload_excel(request: Request, slug: str, file: UploadFile = File(...)
         return RedirectResponse(url_for(request, "/login"), 303)
 
     slug = slug.upper()
+    log_msg(f"Upload received for {slug}")
     content = await file.read()
 
     p1 = parse_sheet_to_events(content, "EDT P1")
     p2 = parse_sheet_to_events(content, "EDT P2")
 
-    supabase.table("plannings").update({
-        "events_p1": p1,
-        "events_p2": p2,
-        "updated_at": datetime.now().isoformat()
-    }).eq("slug", slug).execute()
+    try:
+        supabase.table("plannings").update({
+            "events_p1": p1,
+            "events_p2": p2,
+            "updated_at": datetime.now().isoformat()
+        }).eq("slug", slug).execute()
+        log_msg(f"Update successful for {slug}")
+    except Exception as e:
+        log_msg(f"Error updating DB for {slug}: {e}")
 
     return RedirectResponse(url_for(request, "/"), 303)
 
-@app.get("/ics/{slug}_{group}.ics")
+# =====================================================
+# CORRECTION DE LA ROUTE ICS
+# =====================================================
+
+@app.get("/ics/{slug}/{group}.ics")
 async def ics(slug: str, group: str):
+    """
+    Route corrigée : utilise un '/' entre slug et group.
+    Exemple URL : /ics/FISA-29-S3E-A4-2025-2026/p1.ics
+    """
+    log_msg(f"ICS Route called. Slug: {slug}, Group: {group}")
+    
     slug = slug.upper()
     group = group.lower()
 
     if group not in ("p1", "p2"):
-        raise HTTPException(404)
+        log_msg(f"Invalid group requested: {group}")
+        raise HTTPException(status_code=404, detail="Groupe invalide (doit être p1 ou p2)")
 
-    res = supabase.table("plannings") \
-        .select(f"events_{group}") \
-        .eq("slug", slug).execute()
+    # Appel Supabase
+    try:
+        res = supabase.table("plannings") \
+            .select(f"events_{group}") \
+            .eq("slug", slug).execute()
+        
+        # Log de la réponse brute pour debug
+        # Attention: res.data peut être volumineux, on log juste la taille
+        if res.data:
+            log_msg(f"Supabase found data. Rows: {len(res.data)}")
+        else:
+            log_msg("Supabase returned empty data.")
 
-    if not res.data:
-        raise HTTPException(404)
+    except Exception as e:
+        log_msg(f"Supabase Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    ics = events_to_ics(res.data[0][f"events_{group}"])
+    if not res.data or not res.data[0]:
+        log_msg(f"Planning not found for slug: {slug}")
+        raise HTTPException(status_code=404, detail="Planning introuvable dans la base de données")
+
+    events = res.data[0].get(f"events_{group}")
+    
+    if not events:
+        # C'est valide mais vide
+        log_msg("Planning found but events list is empty")
+        events = []
+
+    ics_content = events_to_ics(events)
 
     return Response(
-        content=ics,
+        content=ics_content,
         media_type="text/calendar",
         headers={"Content-Disposition": f"attachment; filename={slug}_{group.upper()}.ics"}
     )
