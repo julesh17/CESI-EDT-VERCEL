@@ -459,6 +459,19 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
 
 @app.get("/ics/{slug}_{group}.ics")
 async def get_ics_file(slug: str, group: str):
+    # On force la recherche en majuscule pour correspondre à ton souhait
+    search_slug = slug.upper() 
+    
+    res = supabase.table("plannings").select(f"events_{group.lower()}").eq("slug", search_slug).execute()
+    
+    # Si on ne trouve rien, on essaie en minuscule au cas où
+    if not res.data:
+        res = supabase.table("plannings").select(f"events_{group.lower()}").eq("slug", slug.lower()).execute()
+    
+    if not res.data:
+        # Si on ne trouve toujours rien, on renvoie une erreur plus parlante
+        raise HTTPException(status_code=404, detail=f"Calendrier {search_slug} non trouvé dans la base")
+        
     # group doit être "P1" ou "P2"
     if group not in ["P1", "P2"]: raise HTTPException(404)
     
