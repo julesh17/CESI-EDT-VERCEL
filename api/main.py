@@ -276,45 +276,42 @@ async def upload_excel(request: Request, slug: str, file: UploadFile = File(...)
 
 @app.get("/ics/{slug}/{group}.ics")
 async def ics(slug: str, group: str):
-    """
-    Route corrigée : utilise un '/' entre slug et group.
-    Exemple URL : /ics/FISA-29-S3E-A4-2025-2026/p1.ics
-    """
     log_msg(f"ICS Route called. Slug: {slug}, Group: {group}")
     
-    slug = slug.upper()
-    group = group.lower()
+    # On nettoie les entrées
+    slug_clean = slug.strip()
+    group_clean = group.lower().strip()
 
-    if group not in ("p1", "p2"):
-        log_msg(f"Invalid group requested: {group}")
-        raise HTTPException(status_code=404, detail="Groupe invalide (doit être p1 ou p2)")
+    if group_clean not in ("p1", "p2"):
+        raise HTTPException(status_code=404, detail="Groupe invalide")
 
-    # Appel Supabase
     try:
+        # Utilisation de .ilike pour ignorer les majuscules/minuscules en base
         res = supabase.table("plannings") \
-            .select(f"events_{group}") \
-            .eq("slug", slug).execute()
+            .select(f"events_{group_clean}") \
+            .ilike("slug", slug_clean) \
+            .execute()
         
-        # Log de la réponse brute pour debug
-        # Attention: res.data peut être volumineux, on log juste la taille
-        if res.data:
-            log_msg(f"Supabase found data. Rows: {len(res.data)}")
-        else:
-            log_msg("Supabase returned empty data.")
+        log_msg(f"Query executed for slug: {slug_clean}")
 
     except Exception as e:
         log_msg(f"Supabase Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erreur connexion base de données")
 
-    if not res.data or not res.data[0]:
-        log_msg(f"Planning not found for slug: {slug}")
-        raise HTTPException(status_code=404, detail="Planning introuvable dans la base de données")
+    # Si res.data est vide []
+    if not res.data:
+        log_msg(f"AUCUN RESULTAT pour le slug: {slug_clean}")
+        # Petit debug : on liste les 3 premiers slugs de la base pour comparer
+        try:
+            check = supabase.table("plannings").select("slug").limit(3).execute()
+            log_msg(f"Exemples de slugs en base: {[row['slug'] for row in check.data]}")
+        except: pass
+        
+        raise HTTPException(status_code=404, detail=f"Planning '{slug_clean}' introuvable")
 
-    events = res.data[0].get(f"events_{group}")
+    events = res.data[0].get(f"events_{group_clean}")
     
-    if not events:
-        # C'est valide mais vide
-        log_msg("Planning found but events list is empty")
+    if events is None:
         events = []
 
     ics_content = events_to_ics(events)
@@ -322,5 +319,5 @@ async def ics(slug: str, group: str):
     return Response(
         content=ics_content,
         media_type="text/calendar",
-        headers={"Content-Disposition": f"attachment; filename={slug}_{group.upper()}.ics"}
+        headers={"Content-Disposition": f"attachment; filename={slug_clean}_{group_clean.upper()}.ics"}
     )
