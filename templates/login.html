@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion Planning</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #e9ecef; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .card { width: 100%; max-width: 400px; }
+    </style>
+</head>
+<body>
+    <div class="card shadow">
+        <div class="card-body p-4">
+            <h3 class="text-center mb-4">
+                {% if mode == 'login' %}Connexion{% else %}Créer un compte{% endif %}
+            </h3>
+            
+            {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+
+            <form method="post">
+                <div class="mb-3">
+                    <label class="form-label">Pseudo</label>
+                    <input type="text" name="username" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+                
+                {% if mode == 'register' %}
+                <div class="mb-3">
+                    <label class="form-label">Code de vérification</label>
+                    <input type="text" name="verification" class="form-control" placeholder="Code secret..." required>
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn btn-primary w-100">
+                    {% if mode == 'login' %}Se connecter{% else %}S'inscrire{% endif %}
+                </button>
+            </form>
+            
+            <div class="text-center mt-3">
+                {% if mode == 'login' %}
+                    <a href="/register">Je n'ai pas de compte (Créer)</a>
+                {% else %}
+                    <a href="/login">J'ai déjà un compte (Connexion)</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
