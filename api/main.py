@@ -3,9 +3,8 @@ import os
 import re
 import uuid
 import hashlib
-import json
 from datetime import datetime, date, time
-from typing import List, Optional, Any
+from typing import List
 
 # --- BIBLIOTHEQUES WEB ---
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
@@ -46,6 +45,8 @@ app.add_middleware(
     same_site="lax",
     https_only=True
 )
+
+PARIS_TZ = pytz.timezone("Europe/Paris")
 
 # ==========================================
 # 2. PARSING
@@ -166,7 +167,11 @@ def find_week_rows(df):
 
 
 def find_slot_rows(df):
-    return [i for i in range(len(df)) if isinstance(df.iat[i, 0], str) and re.match(r'^\s*H\s*\d+', df.iat[i, 0].strip(), re.I)]
+    return [
+        i for i in range(len(df))
+        if isinstance(df.iat[i, 0], str)
+        and re.match(r'^\s*H\s*\d+', df.iat[i, 0].strip(), re.I)
+    ]
 
 
 def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dict]:
@@ -200,7 +205,10 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         date_row = p + 1
         group_row = p + 2
 
-        date_cols = [c for c in range(ncols) if date_row < nrows and to_date(df.iat[date_row, c]) is not None]
+        date_cols = [
+            c for c in range(ncols)
+            if date_row < nrows and to_date(df.iat[date_row, c]) is not None
+        ]
 
         for c in date_cols:
             for col in (c, c + 1):
@@ -360,6 +368,7 @@ def escape_ical_text(s: str) -> str:
     s = s.replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
     return s
 
+
 def build_paris_vtimezone_text():
     return "\n".join([
         "BEGIN:VTIMEZONE",
@@ -381,6 +390,7 @@ def build_paris_vtimezone_text():
         "END:STANDARD",
         "END:VTIMEZONE"
     ])
+
 
 def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
     tz = pytz.timezone(tzname)
@@ -456,8 +466,23 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
 def get_current_user(request: Request):
     return request.session.get("user")
 
+
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
+
+
+def convert_updated_at(plannings: list) -> list:
+    """Convertit updated_at UTC → heure Europe/Paris pour l'affichage."""
+    for p in plannings:
+        if p.get("updated_at"):
+            try:
+                dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
+                dt_paris = dt.astimezone(PARIS_TZ)
+                p["updated_at"] = dt_paris.isoformat()
+            except Exception:
+                pass
+    return plannings
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -466,23 +491,13 @@ async def home(request: Request):
         return RedirectResponse(url="/login", status_code=303)
 
     response = supabase.table("plannings").select("slug, name, year, updated_at").execute()
-    plannings = response.data
-
-    # Conversion updated_at en heure Paris
-    paris_tz = pytz.timezone("Europe/Paris")
-    for p in plannings:
-        if p.get("updated_at"):
-            try:
-                dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
-                dt_paris = dt.astimezone(paris_tz)
-                p["updated_at"] = dt_paris.isoformat()
-            except Exception:
-                pass
+    plannings = convert_updated_at(response.data)
 
     return templates.TemplateResponse(request, "index.html", {
         "user": user,
         "plannings": plannings
     })
+
 
 # --- LOGIN / REGISTER ---
 
@@ -490,9 +505,11 @@ async def home(request: Request):
 async def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"mode": "login"})
 
+
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"mode": "register"})
+
 
 @app.post("/login")
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -507,6 +524,7 @@ async def login_submit(request: Request, username: str = Form(...), password: st
             "mode": "login",
             "error": "Identifiants incorrects"
         })
+
 
 @app.post("/register")
 async def register_submit(
@@ -540,10 +558,12 @@ async def register_submit(
             "error": "Erreur technique lors de l'inscription."
         })
 
+
 @app.get("/logout")
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
+
 
 # --- ACTIONS CALENDRIER ---
 
@@ -562,6 +582,7 @@ async def create_calendar(request: Request, promo_name: str = Form(...), school_
 
     return RedirectResponse("/", status_code=303)
 
+
 @app.post("/upload/{slug}")
 async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)):
     if not get_current_user(request):
@@ -570,7 +591,6 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     log_msg(f"Début upload pour {slug}")
     content = await file.read()
 
-    # Diagnostic : affiche les feuilles disponibles
     try:
         xls = pd.ExcelFile(io.BytesIO(content))
         log_msg(f"Feuilles disponibles: {xls.sheet_names}")
@@ -586,12 +606,13 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
         supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(PARIS_TZ).isoformat()
         }).eq("slug", slug).execute()
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
 
     return RedirectResponse("/", status_code=303)
+
 
 # --- URL PUBLIQUE POUR OUTLOOK ---
 
@@ -607,19 +628,48 @@ async def get_ics_file(slug: str, group: str):
         if not res.data:
             raise HTTPException(404, detail="Planning introuvable")
 
-        events_json = res.data[0].get(f"events_{group_clean.lower()}", [])
-
-        if not events_json:
-            events_json = []
-
+        events_json = res.data[0].get(f"events_{group_clean.lower()}", []) or []
         ics_content = events_to_ics_string(events_json)
-
         filename = f"{slug}_{group_clean}.ics"
 
         return Response(content=ics_content, media_type="text/calendar", headers={
             "Content-Disposition": f"attachment; filename={filename}"
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_msg(f"Erreur ICS generation: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+# --- VUE PUBLIQUE CALENDRIER (sans login) ---
+
+@app.get("/calendrier/{slug}", response_class=HTMLResponse)
+async def view_calendar(slug: str, request: Request):
+    res = supabase.table("plannings").select("slug, name, year").ilike("slug", slug).execute()
+    if not res.data:
+        raise HTTPException(404, detail="Planning introuvable")
+    p = res.data[0]
+    return templates.TemplateResponse(request, "calendar_view.html", {
+        "slug": p["slug"],
+        "planning_name": p["name"],
+        "planning_year": p.get("year", ""),
+    })
+
+
+@app.get("/api/events/{slug}/{group}")
+async def api_events(slug: str, group: str):
+    group_clean = group.lower()
+    if group_clean not in ["p1", "p2"]:
+        raise HTTPException(404)
+    try:
+        res = supabase.table("plannings").select(f"events_{group_clean}").ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404)
+        return res.data[0].get(f"events_{group_clean}", []) or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur API events: {e}")
         raise HTTPException(500, detail="Erreur interne")
