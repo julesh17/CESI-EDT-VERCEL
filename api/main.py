@@ -149,7 +149,25 @@ def get_merged_map(xls_fileobj, sheet_name):
 
 
 def find_week_rows(df):
-    return [i for i in range(len(df)) if isinstance(df.iat[i, 0], str) and re.match(r'^\s*S\s*\d+', df.iat[i, 0].strip(), re.I)]
+    result = []
+    for i in range(len(df)):
+        val = df.iat[i, 0]
+        if val is None:
+            continue
+        # Cas 1 : "S 40", "S40", "S.40" (ancien format)
+        if isinstance(val, str) and re.match(r'^\s*S\s*\.?\s*\d+', val.strip(), re.I):
+            result.append(i)
+            continue
+        # Cas 2 : numéro entier seul (nouveau format : 40, 41, 1, 2...)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            # Vérifier que c'est bien un numéro de semaine (1-53)
+            try:
+                n = int(val)
+                if 1 <= n <= 53 and float(val) == n:  # entier, pas de décimale
+                    result.append(i)
+            except (ValueError, TypeError):
+                pass
+    return result
 
 
 def find_slot_rows(df):
