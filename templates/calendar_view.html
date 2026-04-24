@@ -219,6 +219,10 @@
 const SLUG     = "{{ slug }}";
 const BASE_URL = "{{ request.base_url }}";
 
+// Registre global : chaque événement rendu reçoit un index numérique
+// évite tout problème de sérialisation JSON dans les attributs HTML
+let EVENT_REGISTRY = [];
+
 let currentGroup    = 'p1';
 let currentSubgroup = 'all'; // 'all' ou un label de groupe ex: 'G 1'
 let currentView     = 'week';
@@ -424,8 +428,36 @@ function updateLabel() {
     }
 }
 
+// ── HELPER : enregistre un event dans le registre, retourne son index ──
+function reg(ev) {
+    const idx = EVENT_REGISTRY.length;
+    EVENT_REGISTRY.push(ev);
+    return idx;
+}
+
+// ── HELPER : génère le HTML d'un event cliquable (semaine / jour) ──
+function evCard(ev, styleExtra, fontSize) {
+    const c = getColor(ev.summary);
+    const idx = reg(ev);
+    const gBadge = (ev.groups||[]).length
+        ? (ev.groups).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('')
+        : '';
+    const teacher = (ev.teachers||[]).length
+        ? `<div class="cal-event-sub"><i class="bi bi-person" style="font-size:9px"></i> ${esc(ev.teachers.join(', '))}</div>`
+        : '';
+    return `<div class="cal-event"
+        style="${styleExtra}background:${c.bg};color:${c.text};border-left:4px solid ${c.border};${fontSize?'font-size:'+fontSize:''}"
+        data-ev="${idx}">
+        <div class="cal-event-time">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
+        <div class="cal-event-title">${esc(ev.summary)}</div>
+        ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
+        ${teacher}
+    </div>`;
+}
+
 // ── MOIS ──
 function renderMonth() {
+    EVENT_REGISTRY = [];
     const cal=document.getElementById('calendar');
     const yr=currentDate.getFullYear(), mo=currentDate.getMonth();
     const first=new Date(yr,mo,1), last=new Date(yr,mo+1,0);
@@ -445,9 +477,10 @@ function renderMonth() {
             let cls=`month-cell${!inMonth?' other-month':' current-month'}${todayCell?' today-cell':''}`;
             let evHtml=evs.slice(0,max).map(ev=>{
                 const c=getColor(ev.summary);
-                const gBadge = (ev.groups||[]).length ? `<span class="ev-group-badge">${esc((ev.groups||[]).join('·'))}</span>` : '';
-                return `<div class="month-event" style="background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
-                    onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
+                const idx=reg(ev);
+                const gBadge=(ev.groups||[]).length?`<span class="ev-group-badge">${esc((ev.groups).join('·'))}</span>`:'';
+                return `<div class="month-event" data-ev="${idx}"
+                    style="background:${c.bg};color:${c.text};border-left:3px solid ${c.border}">
                     ${gBadge}${fmtTime(ev.startDt)} ${esc(ev.summary)}</div>`;
             }).join('');
             if(evs.length>max) evHtml+=`<div class="month-more">+${evs.length-max} autre${evs.length-max>1?'s':''}</div>`;
@@ -458,10 +491,12 @@ function renderMonth() {
     }
     html+=`</div></div>`;
     cal.innerHTML=html;
+    bindEventClicks(cal);
 }
 
 // ── SEMAINE ──
 function renderWeek() {
+    EVENT_REGISTRY = [];
     const cal=document.getElementById('calendar');
     const mon=monday(currentDate);
     const days=Array.from({length:5},(_,i)=>addDays(mon,i));
@@ -486,22 +521,9 @@ function renderWeek() {
             const sh=ev.startDt.getHours()+ev.startDt.getMinutes()/60;
             const eh=ev.endDt.getHours()+ev.endDt.getMinutes()/60;
             const top=(sh-SH)*HPX, height=Math.max((eh-sh)*HPX,24);
-            const c=getColor(ev.summary);
-            const pct = 100 / totalCols;
-            const leftPct = col * pct;
-            const widthPct = pct - 1; // 1% de gap entre colonnes
-            const gBadge = (ev.groups||[]).length ? (ev.groups||[]).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('') : '';
-
-            return `<div class="cal-event"
-                style="top:${top}px;height:${height}px;
-                       left:${leftPct}%;width:${widthPct}%;
-                       background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
-                onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
-                <div class="cal-event-time">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
-                <div class="cal-event-title">${esc(ev.summary)}</div>
-                ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
-                ${(ev.teachers||[]).length?`<div class="cal-event-sub"><i class="bi bi-person" style="font-size:9px"></i> ${esc((ev.teachers||[]).join(', '))}</div>`:''}
-            </div>`;
+            const pct=100/totalCols;
+            const style=`top:${top}px;height:${height}px;left:${col*pct}%;width:${pct-0.8}%;`;
+            return evCard(ev, style, null);
         }).join('');
 
         return `<div class="day-col">${slots}<div style="position:absolute;inset:0;overflow:hidden"><div style="position:relative;height:100%">${evHtml}</div></div></div>`;
@@ -510,10 +532,12 @@ function renderWeek() {
     cal.innerHTML=`<div class="week-grid">${header}<div class="week-body">${timeCol}${cols}</div></div>`;
     const body=cal.querySelector('.week-body');
     if(body) body.scrollTop=(8-SH)*HPX;
+    bindEventClicks(cal);
 }
 
 // ── JOUR ──
 function renderDay() {
+    EVENT_REGISTRY = [];
     const cal=document.getElementById('calendar');
     const d=currentDate;
     const SH=7, EH=20, HPX=70;
@@ -531,22 +555,9 @@ function renderDay() {
         const sh=ev.startDt.getHours()+ev.startDt.getMinutes()/60;
         const eh=ev.endDt.getHours()+ev.endDt.getMinutes()/60;
         const top=(sh-SH)*HPX, height=Math.max((eh-sh)*HPX,32);
-        const c=getColor(ev.summary);
-        const pct = 100 / totalCols;
-        const leftPct = col * pct;
-        const widthPct = pct - 0.5;
-        const gBadge = (ev.groups||[]).length ? (ev.groups||[]).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('') : '';
-
-        return `<div class="cal-event"
-            style="top:${top}px;height:${height}px;
-                   left:${leftPct}%;width:${widthPct}%;
-                   background:${c.bg};color:${c.text};border-left:4px solid ${c.border};font-size:13px"
-            onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
-            <div class="cal-event-time" style="font-size:11px">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
-            <div class="cal-event-title" style="font-size:14px">${esc(ev.summary)}</div>
-            ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
-            ${(ev.teachers||[]).length?`<div class="cal-event-sub"><i class="bi bi-person"></i> ${esc((ev.teachers||[]).join(', '))}</div>`:''}
-        </div>`;
+        const pct=100/totalCols;
+        const style=`top:${top}px;height:${height}px;left:${col*pct}%;width:${pct-0.5}%;`;
+        return evCard(ev, style, '13px');
     }).join('');
 
     cal.innerHTML=`<div class="day-view-grid">
@@ -561,52 +572,80 @@ function renderDay() {
     </div>`;
     const body=cal.querySelector('.day-view-body');
     if(body) body.scrollTop=(8-SH)*HPX;
+    bindEventClicks(cal);
+}
+
+// ── DELEGATION DE CLIC (propre, sans inline onclick) ──
+function bindEventClicks(root) {
+    root.addEventListener('click', function(e) {
+        const el = e.target.closest('[data-ev]');
+        if (!el) return;
+        e.stopPropagation();
+        const ev = EVENT_REGISTRY[parseInt(el.dataset.ev, 10)];
+        if (ev) showPopup(e, ev, el);
+    });
 }
 
 // ── POPUP ──
-function showPopup(e, title, start, end, teachers, groups, description, color) {
-    e.stopPropagation();
-    const popup=document.getElementById('event-popup');
-    const startDt=new Date(start), endDt=new Date(end);
-    const dateStr=`${DAYS_L[startDt.getDay()]} ${startDt.getDate()} ${MONTHS[startDt.getMonth()]} ${startDt.getFullYear()}`;
-    const dur=Math.round((endDt-startDt)/60000);
-    const durStr=dur>=60?`${Math.floor(dur/60)}h${dur%60>0?fmt2(dur%60):''}`:dur+' min';
+function showPopup(e, ev, triggerEl) {
+    const popup = document.getElementById('event-popup');
+    const c = getColor(ev.summary);
+    const color = c.border;
 
-    // Description formatée (pipe → tirets ou retour ligne)
-    const descHtml = description
-        ? `<div class="popup-row"><i class="bi bi-info-circle"></i><div class="popup-desc">${esc(description).replace(/\|/g, '<br>')}</div></div>`
+    const startDt = ev.startDt, endDt = ev.endDt;
+    const dateStr = `${DAYS_L[startDt.getDay()]} ${startDt.getDate()} ${MONTHS[startDt.getMonth()]} ${startDt.getFullYear()}`;
+    const dur = Math.round((endDt - startDt) / 60000);
+    const durStr = dur >= 60 ? `${Math.floor(dur/60)}h${dur%60>0?fmt2(dur%60):''}` : dur + ' min';
+
+    const groups = ev.groups || [];
+    const teachers = ev.teachers || [];
+    const description = ev.description || '';
+
+    // Description : chaque segment séparé par | devient une ligne
+    const descLines = description.split('|').map(s => s.trim()).filter(Boolean);
+    const descHtml = descLines.length
+        ? `<div class="popup-row" style="align-items:flex-start">
+               <i class="bi bi-info-circle" style="margin-top:3px;flex-shrink:0"></i>
+               <div class="popup-desc">${descLines.map(l => esc(l)).join('<br>')}</div>
+           </div>`
         : '';
 
-    // Groupes
-    const groupHtml = groups && groups.length
-        ? `<div class="popup-row"><i class="bi bi-people"></i><div>${groups.map(g=>`<span class="popup-badge" style="background:${color}22;color:${color}">${esc(g)}</span>`).join('')}</div></div>`
+    const groupHtml = groups.length
+        ? `<div class="popup-row"><i class="bi bi-people"></i>
+               <div>${groups.map(g=>`<span class="popup-badge" style="background:${color}22;color:${color}">${esc(g)}</span>`).join('')}</div>
+           </div>`
         : '';
 
-    popup.innerHTML=`
+    popup.innerHTML = `
         <div class="popup-bar" style="background:${color}"></div>
         <button class="popup-close" onclick="closePopup()"><i class="bi bi-x"></i></button>
-        <div class="popup-title">${esc(title)}</div>
+        <div class="popup-title">${esc(ev.summary)}</div>
         <div class="popup-row"><i class="bi bi-calendar3"></i><div>${dateStr}</div></div>
-        <div class="popup-row"><i class="bi bi-clock"></i><div><strong>${fmtTime(startDt)} – ${fmtTime(endDt)}</strong> <span style="color:var(--text-3)">(${durStr})</span></div></div>
-        ${teachers&&teachers.length?`<div class="popup-row"><i class="bi bi-person"></i><div>${esc(teachers.join(' / '))}</div></div>`:''}
+        <div class="popup-row"><i class="bi bi-clock"></i>
+            <div><strong>${fmtTime(startDt)} – ${fmtTime(endDt)}</strong>
+            <span style="color:var(--text-3)"> (${durStr})</span></div>
+        </div>
+        ${teachers.length ? `<div class="popup-row"><i class="bi bi-person"></i><div>${esc(teachers.join(' / '))}</div></div>` : ''}
         ${groupHtml}
         ${descHtml}
     `;
 
-    const tgt=e.target.closest('.cal-event,.month-event');
-    const rect=tgt?tgt.getBoundingClientRect():{left:e.clientX,top:e.clientY,right:e.clientX};
-    let left=rect.right+8, top=rect.top;
-    if(left+330>window.innerWidth) left=rect.left-330;
-    if(top+320>window.innerHeight) top=window.innerHeight-330;
-    if(top<70) top=70;
-    popup.style.left=`${left}px`; popup.style.top=`${top}px`;
-    popup.style.display='block';
-    document.getElementById('overlay').style.display='block';
+    // Positionnement
+    const rect = triggerEl ? triggerEl.getBoundingClientRect() : { left: e.clientX, top: e.clientY, right: e.clientX };
+    let left = rect.right + 10, top = rect.top;
+    if (left + 330 > window.innerWidth) left = rect.left - 330;
+    if (left < 8) left = 8;
+    if (top + 340 > window.innerHeight) top = window.innerHeight - 348;
+    if (top < 70) top = 70;
+    popup.style.left = `${left}px`;
+    popup.style.top  = `${top}px`;
+    popup.style.display = 'block';
+    document.getElementById('overlay').style.display = 'block';
 }
 
 function closePopup() {
-    document.getElementById('event-popup').style.display='none';
-    document.getElementById('overlay').style.display='none';
+    document.getElementById('event-popup').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
 }
 
 renderAfterLoad();
