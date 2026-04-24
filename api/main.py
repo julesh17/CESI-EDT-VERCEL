@@ -24,14 +24,12 @@ from openpyxl import load_workbook
 # 1. CONFIGURATION
 # ==========================================
 
-# Fonction simple pour voir les traces dans les logs Vercel
 def log_msg(msg: str):
     print(f"[LOG VERCEL] {msg}")
 
 SUPABASE_URL = "https://dlxqgelylxcakrmbkyun.supabase.co"
 SUPABASE_KEY = "sb_publishable_mgjSTslsZ_ObnIRxCL10AQ_ix5NSBpz"
 
-# Initialisation Supabase
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 except Exception as e:
@@ -39,22 +37,18 @@ except Exception as e:
 
 app = FastAPI()
 
-# Configuration Templates
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Sur Vercel, ajustement chemin templates si besoin. 
-# Si tes templates sont à la racine, 'templates' suffit.
 templates = Jinja2Templates(directory="templates")
 
-# Sécurité Session
 app.add_middleware(
     SessionMiddleware,
     secret_key="SECRET_SESSION_A_CHANGER_POUR_PROD",
     same_site="lax",
-    https_only=True 
+    https_only=True
 )
 
 # ==========================================
-# 2. PARSING (Logique STREAMLIT intégrée)
+# 2. PARSING
 # ==========================================
 
 def normalize_group_label(x):
@@ -85,7 +79,6 @@ def is_time_like(x):
     s = str(x).strip()
     if not s:
         return False
-    # accepte formats hh:mm, hhm m, 9h30, 9:30, 9AM, 9 PM ...
     if re.match(r'^\d{1,2}[:hH]\d{2}(\s*[AaPp][Mm]\.?)*$', s):
         return True
     return False
@@ -131,9 +124,6 @@ def to_date(x):
 
 
 def get_merged_map(xls_fileobj, sheet_name):
-    """
-    Retourne un dict {(row0,col0): (r1,c1,r2,c2)} pour gérer les cellules fusionnées.
-    """
     wb = load_workbook(xls_fileobj, data_only=True)
     if sheet_name not in wb.sheetnames:
         return {}
@@ -149,21 +139,26 @@ def get_merged_map(xls_fileobj, sheet_name):
 
 
 def find_week_rows(df):
+    """
+    Détecte les lignes "semaine" en colonne A.
+    Supporte deux formats :
+      - Ancien : "S40", "S 40", "S.40" (string commençant par S + chiffre)
+      - Nouveau : entier seul (40, 41, 1, 2... entre 1 et 53)
+    """
     result = []
     for i in range(len(df)):
         val = df.iat[i, 0]
         if val is None:
             continue
-        # Cas 1 : "S 40", "S40", "S.40" (ancien format)
+        # Cas 1 : format "S40", "S 40", "S.40"
         if isinstance(val, str) and re.match(r'^\s*S\s*\.?\s*\d+', val.strip(), re.I):
             result.append(i)
             continue
-        # Cas 2 : numéro entier seul (nouveau format : 40, 41, 1, 2...)
+        # Cas 2 : entier seul représentant un numéro de semaine (1-53)
         if isinstance(val, (int, float)) and not isinstance(val, bool):
-            # Vérifier que c'est bien un numéro de semaine (1-53)
             try:
                 n = int(val)
-                if 1 <= n <= 53 and float(val) == n:  # entier, pas de décimale
+                if 1 <= n <= 53 and float(val) == n:
                     result.append(i)
             except (ValueError, TypeError):
                 pass
@@ -175,13 +170,8 @@ def find_slot_rows(df):
 
 
 def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dict]:
-    """
-    Parse le fichier Excel (bytes) et retourne une liste de dicts JSON-serializable.
-    C'est ici qu'on intègre toute la logique robuste du Streamlit.
-    """
-    # Création d'un BytesIO pour pandas
     file_io = io.BytesIO(file_content)
-    
+
     try:
         df = pd.read_excel(file_io, sheet_name=sheet_name, header=None)
     except ValueError:
@@ -191,7 +181,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         log_msg(f"Erreur lecture Excel: {e}")
         return []
 
-    # Reset du pointeur pour openpyxl car pandas l'a lu
     file_io.seek(0)
     merged_map = get_merged_map(file_io, sheet_name)
 
@@ -199,10 +188,11 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
     s_rows = find_week_rows(df)
     h_rows = find_slot_rows(df)
 
+    log_msg(f"[{sheet_name}] Semaines trouvées: {len(s_rows)}, Créneaux trouvés: {len(h_rows)}")
+
     raw_events = []
 
     for r in h_rows:
-        # Trouver la semaine associée (le S_row juste au-dessus)
         p_candidates = [s for s in s_rows if s <= r]
         if not p_candidates:
             continue
@@ -210,15 +200,13 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         date_row = p + 1
         group_row = p + 2
 
-        # Identifier les colonnes qui contiennent une date valide
         date_cols = [c for c in range(ncols) if date_row < nrows and to_date(df.iat[date_row, c]) is not None]
 
         for c in date_cols:
-            # On itère sur la colonne c et c+1 (gestion des demi-colonnes ou fusions)
             for col in (c, c + 1):
                 if col >= ncols:
                     continue
-                
+
                 summary = df.iat[r, col]
                 if pd.isna(summary) or summary is None:
                     continue
@@ -226,50 +214,59 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if not summary_str:
                     continue
 
-                # --- 1. Enseignants ---
+                # Enseignants
                 teachers = []
                 if (r + 2) < nrows:
-                    for off in range(2, 6): # Cherche 2 à 5 lignes en dessous
+                    for off in range(2, 6):
                         idx = r + off
-                        if idx >= nrows: break
+                        if idx >= nrows:
+                            break
                         t = df.iat[idx, col]
-                        if t is None or pd.isna(t): continue
+                        if t is None or pd.isna(t):
+                            continue
                         s = str(t).strip()
-                        if not s: continue
-                        # Si ce n'est ni une heure ni une date, c'est probablement un prof
+                        if not s:
+                            continue
                         if not is_time_like(s) and to_date(s) is None:
                             teachers.append(s)
-                teachers = list(dict.fromkeys(teachers)) # Dedup
+                teachers = list(dict.fromkeys(teachers))
 
-                # --- 2. Index de fin (Stop Index) ---
+                # Index de fin
                 stop_idx = None
                 for off in range(1, 12):
                     idx = r + off
-                    if idx >= nrows: break
+                    if idx >= nrows:
+                        break
                     if is_time_like(df.iat[idx, col]):
                         stop_idx = idx
                         break
                 if stop_idx is None:
                     stop_idx = min(r + 7, nrows)
 
-                # --- 3. Description ---
+                # Description
                 desc_parts = []
                 for idx in range(r + 1, stop_idx):
-                    if idx >= nrows: break
+                    if idx >= nrows:
+                        break
                     cell = df.iat[idx, col]
-                    if pd.isna(cell) or cell is None: continue
+                    if pd.isna(cell) or cell is None:
+                        continue
                     s = str(cell).strip()
-                    if not s: continue
-                    if to_date(cell) is not None: continue
-                    if s in teachers or s == summary_str: continue
+                    if not s:
+                        continue
+                    if to_date(cell) is not None:
+                        continue
+                    if s in teachers or s == summary_str:
+                        continue
                     desc_parts.append(s)
                 desc_text = " | ".join(dict.fromkeys(desc_parts))
 
-                # --- 4. Heures (Start/End) ---
+                # Heures
                 start_val, end_val = None, None
                 for off in range(1, 13):
                     idx = r + off
-                    if idx >= nrows: break
+                    if idx >= nrows:
+                        break
                     v = df.iat[idx, col]
                     if is_time_like(v):
                         if start_val is None:
@@ -277,37 +274,40 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                         elif end_val is None and v != start_val:
                             end_val = v
                             break
-                
+
                 if start_val is None or end_val is None:
                     continue
-                
+
                 start_t, end_t = to_time(start_val), to_time(end_val)
                 if start_t is None or end_t is None:
                     continue
 
-                # --- 5. Construction DateTime ---
+                # Construction DateTime
                 d = to_date(df.iat[date_row, c])
                 if d is None:
                     continue
                 dtstart = datetime.combine(d, start_t)
                 dtend = datetime.combine(d, end_t)
 
-                # --- 6. Groupes ---
+                # Groupes
                 gl = normalize_group_label(df.iat[group_row, col] if group_row < nrows else None)
                 gl_next = normalize_group_label(df.iat[group_row, col + 1] if (col + 1) < ncols else None)
                 is_left_col = (col == c)
-                
+
                 groups = set()
                 if is_left_col:
                     merged = merged_map.get((r, col))
-                    # Si fusion détectée avec la colonne suivante
                     if merged and (r, col + 1) in merged_map:
-                        if gl: groups.add(gl)
-                        if gl_next: groups.add(gl_next)
+                        if gl:
+                            groups.add(gl)
+                        if gl_next:
+                            groups.add(gl_next)
                     else:
-                        if gl: groups.add(gl)
+                        if gl:
+                            groups.add(gl)
                 else:
-                    if gl: groups.add(gl)
+                    if gl:
+                        groups.add(gl)
 
                 raw_events.append({
                     'summary': summary_str,
@@ -318,7 +318,7 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                     'groups': groups
                 })
 
-    # --- Fusion des événements identiques ---
+    # Fusion des événements identiques
     merged = {}
     for e in raw_events:
         key = (e['summary'], e['start'], e['end'])
@@ -335,15 +335,15 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         merged[key]['descriptions'].update(e.get('descriptions', set()))
         merged[key]['groups'].update(e.get('groups', set()))
 
-    # --- Conversion en JSON Serializable pour Supabase ---
+    # Conversion JSON serializable
     final_list = []
     for v in merged.values():
         final_list.append({
             'summary': v['summary'],
             'teachers': sorted(list(v['teachers'])),
             'description': " | ".join(sorted(list(v['descriptions']))) if v['descriptions'] else "",
-            'start': v['start'].isoformat(), # Important: datetime -> string ISO
-            'end': v['end'].isoformat(),     # Important: datetime -> string ISO
+            'start': v['start'].isoformat(),
+            'end': v['end'].isoformat(),
             'groups': sorted(list(v['groups']))
         })
 
@@ -383,36 +383,31 @@ def build_paris_vtimezone_text():
     ])
 
 def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
-    """
-    Transforme la liste d'events (JSON/Dicts) en string .ics
-    """
     tz = pytz.timezone(tzname)
-    
+
     header = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
         'PRODID:-//EDT Export//FR',
         'CALSCALE:GREGORIAN',
     ]
-    
+
     body = [build_paris_vtimezone_text()]
 
     for ev in events:
         uid = str(uuid.uuid4())
-        
-        # Désérialisation ISO String -> Datetime
+
         try:
             start_dt = datetime.fromisoformat(ev['start'])
             end_dt = datetime.fromisoformat(ev['end'])
         except ValueError:
-            continue # Ignorer si date invalide
+            continue
 
-        # Localize (L'excel est en heure locale naïve, on le force en Europe/Paris)
         if start_dt.tzinfo is None:
             start_loc = tz.localize(start_dt)
         else:
             start_loc = start_dt.astimezone(tz)
-            
+
         if end_dt.tzinfo is None:
             end_loc = tz.localize(end_dt)
         else:
@@ -420,19 +415,17 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
 
         dtstart = start_loc.strftime('%Y%m%dT%H%M%S')
         dtend = end_loc.strftime('%Y%m%dT%H%M%S')
-        
+
         summary = escape_ical_text(ev['summary'])
 
         desc_lines = []
         if ev.get('description'):
             desc_lines.append(ev['description'])
-        
-        # Gestion liste profs (peut être vide)
+
         teachers = ev.get('teachers', [])
         if teachers:
             desc_lines.append('Enseignant(s): ' + ' / '.join(teachers))
-            
-        # Gestion liste groupes (peut être vide)
+
         groups = ev.get('groups', [])
         if groups:
             if len(groups) == 1:
@@ -470,17 +463,13 @@ def hash_password(password: str):
 async def home(request: Request):
     user = get_current_user(request)
     if not user:
-        # url_for gère les préfixes Vercel automatiquement si configuré, 
-        # sinon une string brute "/login" fonctionne aussi généralement.
         return RedirectResponse(url="/login", status_code=303)
-    
-    # Récupérer les calendriers
+
     response = supabase.table("plannings").select("slug, name, year, updated_at").execute()
     plannings = response.data
-    
-    return templates.TemplateResponse("index.html", {
-        "request": request, 
-        "user": user, 
+
+    return templates.TemplateResponse(request, "index.html", {
+        "user": user,
         "plannings": plannings
     })
 
@@ -488,56 +477,56 @@ async def home(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "mode": "login"})
+    return templates.TemplateResponse(request, "login.html", {"mode": "login"})
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "mode": "register"})
+    return templates.TemplateResponse(request, "login.html", {"mode": "register"})
 
 @app.post("/login")
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     hashed = hash_password(password)
     res = supabase.table("users").select("*").eq("username", username).eq("password_hash", hashed).execute()
-    
+
     if len(res.data) > 0:
         request.session["user"] = username
         return RedirectResponse(url="/", status_code=303)
     else:
-        return templates.TemplateResponse("login.html", {
-            "request": request, "mode": "login", "error": "Identifiants incorrects"
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "login",
+            "error": "Identifiants incorrects"
         })
 
 @app.post("/register")
 async def register_submit(
-    request: Request, 
-    username: str = Form(...), 
-    password: str = Form(...), 
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
     verification: str = Form(...)
 ):
-    # --- VALIDATION EUROVISION ---
     if verification.strip().upper() != "EUROVISION":
-        return templates.TemplateResponse("login.html", {
-            "request": request, "mode": "register", "error": "Code de vérification incorrect !"
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Code de vérification incorrect !"
         })
-    
-    # Vérif si user existe
+
     check = supabase.table("users").select("*").eq("username", username).execute()
     if len(check.data) > 0:
-        return templates.TemplateResponse("login.html", {
-            "request": request, "mode": "register", "error": "Ce pseudo est déjà pris."
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Ce pseudo est déjà pris."
         })
-    
-    # Création
+
     hashed = hash_password(password)
     try:
         supabase.table("users").insert({"username": username, "password_hash": hashed}).execute()
-        # Connexion auto
         request.session["user"] = username
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
         log_msg(f"Erreur inscription: {e}")
-        return templates.TemplateResponse("login.html", {
-            "request": request, "mode": "register", "error": "Erreur technique lors de l'inscription."
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Erreur technique lors de l'inscription."
         })
 
 @app.get("/logout")
@@ -549,8 +538,9 @@ async def logout(request: Request):
 
 @app.post("/create")
 async def create_calendar(request: Request, promo_name: str = Form(...), school_year: str = Form(...)):
-    if not get_current_user(request): return RedirectResponse("/login")
-    
+    if not get_current_user(request):
+        return RedirectResponse("/login")
+
     slug = f"{promo_name}-{school_year}".lower().replace(" ", "-")
     data = {"slug": slug, "name": promo_name, "year": school_year}
     try:
@@ -558,22 +548,29 @@ async def create_calendar(request: Request, promo_name: str = Form(...), school_
         log_msg(f"Nouveau planning créé: {slug}")
     except Exception as e:
         log_msg(f"Erreur création (existe probablement déjà): {e}")
-        
+
     return RedirectResponse("/", status_code=303)
 
 @app.post("/upload/{slug}")
 async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)):
-    if not get_current_user(request): return RedirectResponse("/login")
-    
+    if not get_current_user(request):
+        return RedirectResponse("/login")
+
     log_msg(f"Début upload pour {slug}")
     content = await file.read()
-    
-    # Parsing using the robust functions
+
+    # Diagnostic : affiche les feuilles disponibles
+    try:
+        xls = pd.ExcelFile(io.BytesIO(content))
+        log_msg(f"Feuilles disponibles: {xls.sheet_names}")
+    except Exception as e:
+        log_msg(f"Erreur lecture feuilles: {e}")
+
     events_p1 = parse_sheet_to_events_json(content, "EDT P1")
     events_p2 = parse_sheet_to_events_json(content, "EDT P2")
-    
+
     log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}")
-    
+
     try:
         supabase.table("plannings").update({
             "events_p1": events_p1,
@@ -582,40 +579,36 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
         }).eq("slug", slug).execute()
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
-    
+
     return RedirectResponse("/", status_code=303)
 
-# --- URL PUBLIQUE POUR OUTLOOK (Pas de Login nécessaire) ---
+# --- URL PUBLIQUE POUR OUTLOOK ---
 
 @app.get("/ics/{slug}/{group}.ics")
 async def get_ics_file(slug: str, group: str):
-    # group doit être "P1" ou "P2" (insensible à la casse dans l'URL, converti en logique)
     group_clean = group.upper()
     if group_clean not in ["P1", "P2"]:
         raise HTTPException(404, detail="Groupe inconnu (utiliser P1 ou P2)")
-    
-    # Récupération en base
+
     try:
-        # .ilike pour insensible à la casse sur le slug
         res = supabase.table("plannings").select(f"events_{group_clean.lower()}").ilike("slug", slug).execute()
-        
+
         if not res.data:
             raise HTTPException(404, detail="Planning introuvable")
-        
+
         events_json = res.data[0].get(f"events_{group_clean.lower()}", [])
-        
+
         if not events_json:
-            # On génère quand même un ICS vide valide pour éviter les erreurs Outlook
             events_json = []
 
         ics_content = events_to_ics_string(events_json)
-        
+
         filename = f"{slug}_{group_clean}.ics"
-        
+
         return Response(content=ics_content, media_type="text/calendar", headers={
             "Content-Disposition": f"attachment; filename={filename}"
         })
-        
+
     except Exception as e:
         log_msg(f"Erreur ICS generation: {e}")
         raise HTTPException(500, detail="Erreur interne")
