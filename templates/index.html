@@ -6,7 +6,7 @@
     <title>EDT CESI | Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    
+
     <style>
         :root {
             --bg-body: #f5f5f7;
@@ -20,23 +20,18 @@
             background-color: var(--bg-body);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             color: var(--text-primary);
-            padding-top: 80px; /* Espace pour la navbar fixe */
+            padding-top: 80px;
         }
 
-        /* --- Navbar Glassmorphism --- */
         .navbar-glass {
             background: rgba(255, 255, 255, 0.75);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
         }
-        
-        .nav-logo {
-            height: 40px;
-            margin-right: 10px;
-        }
-        
+
+        .nav-logo { height: 40px; margin-right: 10px; }
+
         .user-pill {
             background: rgba(0,0,0,0.05);
             padding: 5px 15px;
@@ -45,7 +40,6 @@
             font-weight: 500;
         }
 
-        /* --- Cards --- */
         .card-apple {
             border: none;
             border-radius: 20px;
@@ -55,7 +49,7 @@
             overflow: hidden;
             height: 100%;
         }
-        
+
         .card-apple:hover {
             transform: translateY(-5px);
             box-shadow: 0 12px 30px rgba(0,0,0,0.08);
@@ -64,14 +58,11 @@
         .card-header-clean {
             background: transparent;
             border-bottom: 1px solid #f0f0f0;
-            padding: 1.5rem 1.5rem 0.5rem 1.5rem;
+            padding: 1.5rem 1.5rem 0.75rem 1.5rem;
         }
 
-        .card-body-clean {
-            padding: 1.5rem;
-        }
+        .card-body-clean { padding: 1.5rem; }
 
-        /* --- Inputs & Buttons --- */
         .form-control-apple {
             border-radius: 12px;
             border: 1px solid #d2d2d7;
@@ -122,14 +113,10 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             transition: all 0.2s;
             padding: 5px 12px;
+            flex-shrink: 0;
         }
-        .btn-copy:hover {
-            color: var(--accent);
-            background: #fff;
-            transform: translateY(-1px);
-        }
+        .btn-copy:hover { color: var(--accent); transform: translateY(-1px); }
 
-        /* --- Badge & Typos --- */
         .badge-year {
             background-color: #f5f5f7;
             color: var(--text-secondary);
@@ -138,7 +125,6 @@
             padding: 4px 8px;
             font-size: 11px;
             letter-spacing: 0.5px;
-            vertical-align: middle;
         }
 
         .section-title {
@@ -146,20 +132,46 @@
             font-weight: 700;
             letter-spacing: -0.5px;
             margin-bottom: 20px;
-            color: var(--text-primary);
         }
 
-        /* --- Animation d'entrée --- */
+        .btn-view {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 10px;
+            border: 1.5px solid #e5e5e5;
+            background: #fbfbfd;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-view:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: #f0f7ff;
+        }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding-top: 1rem;
+            margin-top: 1rem;
+            border-top: 1px solid #f0f0f0;
+        }
+
         .fade-in-up {
             opacity: 0;
             animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-        
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            to   { opacity: 1; transform: translateY(0); }
         }
-
         .delay-1 { animation-delay: 0.1s; }
         .delay-2 { animation-delay: 0.2s; }
     </style>
@@ -172,7 +184,6 @@
             <img src="https://peoplespheres.com/wp-content/uploads/2024/10/CESI-logo.png" alt="CESI" class="nav-logo">
             <span>EDT Manager</span>
         </a>
-        
         <div class="d-flex align-items-center">
             <div class="user-pill d-none d-sm-block me-3">
                 <i class="bi bi-person-circle text-muted me-1"></i> {{ user }}
@@ -193,15 +204,18 @@
     </div>
     {% endif %}
 
+    <!-- Créer un nouveau planning -->
     <div class="card card-apple mb-5 fade-in-up">
         <div class="card-body-clean d-flex flex-column flex-md-row align-items-center justify-content-between p-4">
             <div class="mb-3 mb-md-0">
                 <h5 class="fw-bold mb-1">Nouveau Planning</h5>
                 <p class="text-muted small mb-0">Ajoutez une nouvelle promotion pour générer des liens ICS.</p>
             </div>
-            <form action="/create" method="post" class="d-flex gap-2 w-100 w-md-auto" style="max-width: 600px;">
-                <input type="text" name="promo_name" class="form-control form-control-apple" placeholder="Nom (ex: FISA 29 S3E A4)" required>
-                <input type="text" name="school_year" class="form-control form-control-apple" placeholder="Année (ex: 2025-2026)" style="max-width: 200px;" required>
+            <form action="/create" method="post" class="d-flex gap-2 w-100" style="max-width: 620px;">
+                <input type="text" name="promo_name" class="form-control form-control-apple"
+                       placeholder="Nom (ex: FISA 29 S3E A4)" required>
+                <input type="text" name="school_year" class="form-control form-control-apple"
+                       placeholder="Année (ex: 2025-2026)" style="max-width: 200px;" required>
                 <button type="submit" class="btn btn-primary-apple text-nowrap">
                     <i class="bi bi-plus-lg"></i> Créer
                 </button>
@@ -210,11 +224,13 @@
     </div>
 
     <h3 class="section-title fade-in-up delay-1">Vos Promotions</h3>
-    
+
     <div class="row">
         {% for p in plannings %}
         <div class="col-lg-6 col-xl-4 mb-4 fade-in-up delay-2">
             <div class="card card-apple h-100">
+
+                <!-- En-tête -->
                 <div class="card-header-clean d-flex justify-content-between align-items-start">
                     <div>
                         <h4 class="fw-bold mb-0 text-uppercase" style="letter-spacing: -0.5px;">{{ p.name }}</h4>
@@ -224,7 +240,8 @@
                         <small class="d-block text-muted" style="font-size: 10px; font-weight: 600; text-transform: uppercase;">Mise à jour</small>
                         <small class="text-success fw-bold" style="font-size: 12px;">
                             {% if p.updated_at %}
-                                {{ p.updated_at[8:10] }}/{{ p.updated_at[5:7] }} <span class="text-muted fw-normal">{{ p.updated_at[11:16] }}</span>
+                                {{ p.updated_at[8:10] }}/{{ p.updated_at[5:7] }}
+                                <span class="text-muted fw-normal">{{ p.updated_at[11:16] }}</span>
                             {% else %}
                                 --/--
                             {% endif %}
@@ -232,39 +249,57 @@
                     </div>
                 </div>
 
+                <!-- Corps -->
                 <div class="card-body-clean">
-                    
+
+                    <!-- Lien ICS P1 -->
                     <div class="mb-3">
-                        <label class="small text-muted fw-bold mb-1" style="font-size: 11px;">GROUPE P1</label>
+                        <label class="small text-muted fw-bold mb-1 d-block" style="font-size: 11px;">GROUPE P1</label>
                         <div class="input-group-code">
-                            <input type="text" readonly class="form-control" value="{{ request.base_url }}ics/{{ p.slug }}/p1.ics" id="link-p1-{{ p.slug }}">
-                            <button class="btn-copy" onclick="copyToClipboard('link-p1-{{ p.slug }}', this)">
+                            <input type="text" readonly class="form-control"
+                                   value="{{ request.base_url }}ics/{{ p.slug }}/p1.ics"
+                                   id="link-p1-{{ p.slug }}">
+                            <button class="btn-copy" onclick="copyToClipboard('link-p1-{{ p.slug }}', this)" title="Copier le lien">
                                 <i class="bi bi-clipboard"></i>
                             </button>
                         </div>
                     </div>
 
+                    <!-- Lien ICS P2 -->
                     <div class="mb-4">
-                        <label class="small text-muted fw-bold mb-1" style="font-size: 11px;">GROUPE P2</label>
+                        <label class="small text-muted fw-bold mb-1 d-block" style="font-size: 11px;">GROUPE P2</label>
                         <div class="input-group-code">
-                            <input type="text" readonly class="form-control" value="{{ request.base_url }}ics/{{ p.slug }}/p2.ics" id="link-p2-{{ p.slug }}">
-                            <button class="btn-copy" onclick="copyToClipboard('link-p2-{{ p.slug }}', this)">
+                            <input type="text" readonly class="form-control"
+                                   value="{{ request.base_url }}ics/{{ p.slug }}/p2.ics"
+                                   id="link-p2-{{ p.slug }}">
+                            <button class="btn-copy" onclick="copyToClipboard('link-p2-{{ p.slug }}', this)" title="Copier le lien">
                                 <i class="bi bi-clipboard"></i>
                             </button>
                         </div>
                     </div>
 
-                    <form action="/upload/{{ p.slug }}" method="post" enctype="multipart/form-data" class="pt-3 border-top border-light">
-                        <label class="small text-muted fw-bold mb-2 d-flex align-items-center">
+                    <!-- Upload Excel -->
+                    <form action="/upload/{{ p.slug }}" method="post" enctype="multipart/form-data">
+                        <label class="small text-muted fw-bold mb-2 d-flex align-items-center" style="font-size: 11px;">
                             <i class="bi bi-file-earmark-spreadsheet me-1"></i> METTRE À JOUR (.xlsx)
                         </label>
                         <div class="input-group">
-                            <input type="file" name="file" class="form-control form-control-sm form-control-apple" accept=".xlsx" required>
-                            <button class="btn btn-sm btn-primary-apple" type="submit">
+                            <input type="file" name="file"
+                                   class="form-control form-control-sm form-control-apple"
+                                   accept=".xlsx" required>
+                            <button class="btn btn-sm btn-primary-apple" type="submit" title="Uploader">
                                 <i class="bi bi-cloud-arrow-up-fill"></i>
                             </button>
                         </div>
                     </form>
+
+                    <!-- Lien calendrier public -->
+                    <div class="card-actions">
+                        <a href="/calendrier/{{ p.slug }}" target="_blank" class="btn-view">
+                            <i class="bi bi-calendar3"></i> Voir le calendrier
+                        </a>
+                        <span class="text-muted" style="font-size: 11px;">Lien public · sans connexion</span>
+                    </div>
 
                 </div>
             </div>
@@ -283,18 +318,16 @@
 
 <script>
     function copyToClipboard(elementId, btn) {
-        const copyText = document.getElementById(elementId);
-        copyText.select();
-        copyText.setSelectionRange(0, 99999);
-        
-        navigator.clipboard.writeText(copyText.value).then(() => {
-            const originalIcon = btn.innerHTML;
+        const el = document.getElementById(elementId);
+        el.select();
+        el.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(el.value).then(() => {
+            const orig = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
-            btn.style.transform = "scale(1.1)";
-            
+            btn.style.transform = 'scale(1.1)';
             setTimeout(() => {
-                btn.innerHTML = '<i class="bi bi-clipboard"></i>';
-                btn.style.transform = "scale(1)";
+                btn.innerHTML = orig;
+                btn.style.transform = 'scale(1)';
             }, 2000);
         });
     }
