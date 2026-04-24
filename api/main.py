@@ -468,6 +468,17 @@ async def home(request: Request):
     response = supabase.table("plannings").select("slug, name, year, updated_at").execute()
     plannings = response.data
 
+    # Conversion updated_at en heure Paris
+    paris_tz = pytz.timezone("Europe/Paris")
+    for p in plannings:
+        if p.get("updated_at"):
+            try:
+                dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
+                dt_paris = dt.astimezone(paris_tz)
+                p["updated_at"] = dt_paris.isoformat()
+            except Exception:
+                pass
+
     return templates.TemplateResponse(request, "index.html", {
         "user": user,
         "plannings": plannings
