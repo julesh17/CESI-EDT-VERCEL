@@ -32,17 +32,27 @@
             background: var(--surface); border-bottom: 1px solid var(--border);
             padding: 0 24px; height: 64px; display: flex; align-items: center;
             justify-content: space-between; position: sticky; top: 0; z-index: 100;
+            flex-wrap: wrap; gap: 8px;
         }
         .header-left { display: flex; align-items: center; gap: 16px; }
         .logo { height: 32px; }
         .header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
         .header-subtitle { font-size: 12px; color: var(--text-2); }
+
+        /* TABS */
+        .tabs-area { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .group-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; border: 1px solid var(--border); }
         .group-tab { padding: 6px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-2); transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
         .group-tab.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
+        /* Sous-groupes */
+        .subgroup-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; border: 1px solid var(--border); }
+        .subgroup-tab { padding: 5px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-2); transition: all 0.2s; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+        .subgroup-tab.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        #subgroup-area { display: none; }
+
         /* TOOLBAR */
-        .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); gap: 12px; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
         .toolbar-left { display: flex; align-items: center; gap: 8px; }
         .btn-today { padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; font-family: 'DM Sans', sans-serif; }
         .btn-today:hover { background: var(--surface-2); }
@@ -91,10 +101,36 @@
         .time-slot-label { height: 60px; display: flex; align-items: flex-start; justify-content: flex-end; padding: 4px 8px 0 0; font-size: 11px; color: var(--text-3); font-family: 'DM Mono', monospace; }
         .day-col { border-left: 1px solid var(--border); position: relative; }
         .hour-row { height: 60px; border-bottom: 1px solid var(--border); }
-        .cal-event { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 500; cursor: pointer; overflow: hidden; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.10); transition: box-shadow 0.2s, transform 0.2s; }
+
+        /* Événements positionnés (semaine/jour) */
+        .cal-event {
+            position: absolute;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            overflow: hidden;
+            z-index: 2;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+            transition: box-shadow 0.2s, transform 0.2s, z-index 0s;
+        }
         .cal-event:hover { z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: scale(1.01); }
         .cal-event-time { font-family: 'DM Mono', monospace; font-size: 10px; opacity: 0.8; }
         .cal-event-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cal-event-sub { font-size: 10px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Badge de groupe sur l'événement */
+        .ev-group-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.12);
+            margin-right: 3px;
+            vertical-align: middle;
+        }
 
         /* JOUR */
         .day-view-grid { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -105,7 +141,7 @@
         .day-view-body { display: grid; grid-template-columns: 60px 1fr; overflow-y: auto; max-height: calc(100vh - 200px); }
 
         /* POPUP */
-        .event-popup { position: fixed; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 20px 20px 20px 24px; width: 300px; z-index: 1000; border: 1px solid var(--border); animation: popIn 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+        .event-popup { position: fixed; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 20px 20px 20px 24px; width: 320px; z-index: 1000; border: 1px solid var(--border); animation: popIn 0.18s cubic-bezier(0.34,1.56,0.64,1); }
         @keyframes popIn { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
         .popup-close { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; border-radius: 50%; border: none; background: var(--surface-2); color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; }
         .popup-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
@@ -113,13 +149,21 @@
         .popup-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; font-size: 13px; color: var(--text-2); }
         .popup-row i { margin-top: 1px; flex-shrink: 0; }
         .popup-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+        .popup-desc { font-size: 12px; color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; line-height: 1.5; }
         #overlay { display: none; position: fixed; inset: 0; z-index: 999; }
+
+        /* Légende des sous-groupes */
+        .legend-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 11px; font-weight: 600; padding: 3px 10px;
+            border-radius: 20px; margin-right: 4px;
+        }
 
         @media (max-width: 768px) {
             .current-period { font-size: 13px; min-width: 120px; }
             #calendar-container { padding: 10px; }
             .toolbar { padding: 8px 12px; flex-wrap: wrap; }
-            header { padding: 0 12px; }
+            header { padding: 0 12px; height: auto; padding: 8px 12px; }
             .week-header { grid-template-columns: 40px repeat(5, 1fr); }
             .week-body { grid-template-columns: 40px repeat(5, 1fr); max-height: calc(100vh - 220px); }
             .day-view-body { grid-template-columns: 40px 1fr; max-height: calc(100vh - 220px); }
@@ -136,9 +180,16 @@
             <div class="header-subtitle">{{ planning_year }}</div>
         </div>
     </div>
-    <div class="group-tabs">
-        <button class="group-tab active" onclick="switchGroup('p1')">Groupe P1</button>
-        <button class="group-tab" onclick="switchGroup('p2')">Groupe P2</button>
+    <div class="tabs-area">
+        <div id="subgroup-area">
+            <div class="subgroup-tabs" id="subgroup-tabs">
+                <!-- rempli dynamiquement -->
+            </div>
+        </div>
+        <div class="group-tabs">
+            <button class="group-tab active" onclick="switchGroup('p1')">Groupe P1</button>
+            <button class="group-tab" onclick="switchGroup('p2')">Groupe P2</button>
+        </div>
     </div>
 </header>
 
@@ -168,11 +219,12 @@
 const SLUG     = "{{ slug }}";
 const BASE_URL = "{{ request.base_url }}";
 
-let currentGroup = 'p1';
-let currentView  = 'week';
-let currentDate  = new Date();
-let allEvents    = { p1: [], p2: [] };
-let dataLoaded   = { p1: false, p2: false };
+let currentGroup    = 'p1';
+let currentSubgroup = 'all'; // 'all' ou un label de groupe ex: 'G 1'
+let currentView     = 'week';
+let currentDate     = new Date();
+let allEvents       = { p1: [], p2: [] };
+let dataLoaded      = { p1: false, p2: false };
 
 const EVENT_COLORS = [
     { bg:'#eff6ff', border:'#2563eb', text:'#1d4ed8' },
@@ -207,6 +259,55 @@ async function loadEvents(group) {
     dataLoaded[group] = true;
 }
 
+// ── SOUS-GROUPES ──
+function getSubgroups(group) {
+    const evs = allEvents[group];
+    const allGroups = new Set();
+    for (const ev of evs) {
+        for (const g of (ev.groups || [])) {
+            if (g) allGroups.add(g);
+        }
+    }
+    return Array.from(allGroups).sort();
+}
+
+function renderSubgroupTabs() {
+    const subgroups = getSubgroups(currentGroup);
+    const area = document.getElementById('subgroup-area');
+    const tabs  = document.getElementById('subgroup-tabs');
+
+    if (subgroups.length === 0) {
+        area.style.display = 'none';
+        currentSubgroup = 'all';
+        return;
+    }
+
+    area.style.display = 'block';
+    let html = `<button class="subgroup-tab${currentSubgroup==='all'?' active':''}" onclick="switchSubgroup('all')">Tous</button>`;
+    for (const sg of subgroups) {
+        html += `<button class="subgroup-tab${currentSubgroup===sg?' active':''}" onclick="switchSubgroup('${esc(sg)}')">${esc(sg)}</button>`;
+    }
+    tabs.innerHTML = html;
+}
+
+function switchSubgroup(sg) {
+    currentSubgroup = sg;
+    renderSubgroupTabs();
+    render();
+}
+
+// Filtrer les événements selon le sous-groupe sélectionné
+function filteredEvents(group) {
+    const evs = allEvents[group];
+    if (currentSubgroup === 'all') return evs;
+    return evs.filter(ev => {
+        const groups = ev.groups || [];
+        // Si l'événement n'a aucun groupe → l'afficher pour tous
+        if (groups.length === 0) return true;
+        return groups.includes(currentSubgroup);
+    });
+}
+
 // ── NAV ──
 function navigate(dir) {
     if (currentView==='month') currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+dir, 1);
@@ -222,6 +323,7 @@ function setView(v) {
 }
 function switchGroup(g) {
     currentGroup = g;
+    currentSubgroup = 'all';
     document.querySelectorAll('.group-tab').forEach((b,i) => b.classList.toggle('active', ['p1','p2'][i]===g));
     renderAfterLoad();
 }
@@ -239,13 +341,63 @@ const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Aoû
 const DAYS_S = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 const DAYS_L = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 
-function dayEvents(date) { return allEvents[currentGroup].filter(ev => sameDay(ev.startDt, date)); }
+function dayEvents(date) {
+    return filteredEvents(currentGroup).filter(ev => sameDay(ev.startDt, date));
+}
+
+// ── CALCUL COLONNES PARALLÈLES ──
+/**
+ * Prend une liste d'événements d'une même journée,
+ * retourne pour chaque événement : { col, totalCols }
+ * pour permettre le positionnement côte à côte.
+ */
+function computeColumns(events) {
+    // Trier par heure de début
+    const sorted = [...events].map((ev, idx) => ({ ev, idx }))
+        .sort((a, b) => a.ev.startDt - b.ev.startDt);
+
+    const result = new Array(events.length);
+    // Groupes de chevauchement
+    const groups = []; // chaque groupe = tableau d'{ ev, idx, col }
+
+    for (const { ev, idx } of sorted) {
+        // Trouver le groupe actif qui chevauche cet événement
+        let placed = false;
+        for (const grp of groups) {
+            // Est-ce que cet événement chevauche encore le groupe ?
+            const lastEndMax = grp.reduce((m, x) => Math.max(m, x.ev.endDt.getTime()), 0);
+            if (ev.startDt.getTime() < lastEndMax) {
+                // Trouver la première colonne libre dans ce groupe
+                const usedCols = new Set(grp.map(x => x.col));
+                let col = 0;
+                while (usedCols.has(col)) col++;
+                grp.push({ ev, idx, col });
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            groups.push([{ ev, idx, col: 0 }]);
+        }
+    }
+
+    // Calculer totalCols par groupe et assigner
+    for (const grp of groups) {
+        const total = Math.max(...grp.map(x => x.col)) + 1;
+        for (const { idx, col } of grp) {
+            result[idx] = { col, totalCols: total };
+        }
+    }
+
+    return result;
+}
 
 // ── RENDER ──
 async function renderAfterLoad() {
     document.getElementById('loading').style.display='flex';
     document.getElementById('calendar').style.display='none';
     await loadEvents(currentGroup);
+    renderSubgroupTabs();
     document.getElementById('loading').style.display='none';
     document.getElementById('calendar').style.display='block';
     render();
@@ -293,9 +445,10 @@ function renderMonth() {
             let cls=`month-cell${!inMonth?' other-month':' current-month'}${todayCell?' today-cell':''}`;
             let evHtml=evs.slice(0,max).map(ev=>{
                 const c=getColor(ev.summary);
+                const gBadge = (ev.groups||[]).length ? `<span class="ev-group-badge">${esc((ev.groups||[]).join('·'))}</span>` : '';
                 return `<div class="month-event" style="background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
-                    onclick="showPopup(event,'${esc(ev.summary)}','${ev.start}','${ev.end}',${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},'${c.border}')">
-                    ${fmtTime(ev.startDt)} ${esc(ev.summary)}</div>`;
+                    onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
+                    ${gBadge}${fmtTime(ev.startDt)} ${esc(ev.summary)}</div>`;
             }).join('');
             if(evs.length>max) evHtml+=`<div class="month-more">+${evs.length-max} autre${evs.length-max>1?'s':''}</div>`;
             html+=`<div class="${cls}"><div class="day-number">${d.getDate()}</div>${evHtml}</div>`;
@@ -325,19 +478,33 @@ function renderWeek() {
 
     let cols=days.map(day=>{
         let slots=''; for(let h=SH;h<=EH;h++) slots+=`<div class="hour-row"></div>`;
-        let evHtml=dayEvents(day).map(ev=>{
+        const evs = dayEvents(day);
+        const layout = computeColumns(evs);
+
+        let evHtml = evs.map((ev, i) => {
+            const { col, totalCols } = layout[i] || { col:0, totalCols:1 };
             const sh=ev.startDt.getHours()+ev.startDt.getMinutes()/60;
             const eh=ev.endDt.getHours()+ev.endDt.getMinutes()/60;
             const top=(sh-SH)*HPX, height=Math.max((eh-sh)*HPX,24);
             const c=getColor(ev.summary);
-            return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
-                onclick="showPopup(event,'${esc(ev.summary)}','${ev.start}','${ev.end}',${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},'${c.border}')">
+            const pct = 100 / totalCols;
+            const leftPct = col * pct;
+            const widthPct = pct - 1; // 1% de gap entre colonnes
+            const gBadge = (ev.groups||[]).length ? (ev.groups||[]).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('') : '';
+
+            return `<div class="cal-event"
+                style="top:${top}px;height:${height}px;
+                       left:${leftPct}%;width:${widthPct}%;
+                       background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
+                onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
                 <div class="cal-event-time">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
                 <div class="cal-event-title">${esc(ev.summary)}</div>
-                ${(ev.teachers||[]).length?`<div style="font-size:10px;opacity:0.7">${esc((ev.teachers||[]).join(', '))}</div>`:''}
+                ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
+                ${(ev.teachers||[]).length?`<div class="cal-event-sub"><i class="bi bi-person" style="font-size:9px"></i> ${esc((ev.teachers||[]).join(', '))}</div>`:''}
             </div>`;
         }).join('');
-        return `<div class="day-col">${slots}<div style="position:absolute;inset:0"><div style="position:relative">${evHtml}</div></div></div>`;
+
+        return `<div class="day-col">${slots}<div style="position:absolute;inset:0;overflow:hidden"><div style="position:relative;height:100%">${evHtml}</div></div></div>`;
     }).join('');
 
     cal.innerHTML=`<div class="week-grid">${header}<div class="week-body">${timeCol}${cols}</div></div>`;
@@ -351,6 +518,7 @@ function renderDay() {
     const d=currentDate;
     const SH=7, EH=20, HPX=70;
     const evs=dayEvents(d);
+    const layout = computeColumns(evs);
 
     let timeCol=`<div class="time-col">`;
     for(let h=SH;h<=EH;h++) timeCol+=`<div class="time-slot-label" style="height:${HPX}px">${fmt2(h)}:00</div>`;
@@ -358,16 +526,26 @@ function renderDay() {
 
     let slots=''; for(let h=SH;h<=EH;h++) slots+=`<div style="height:${HPX}px;border-bottom:1px solid var(--border)"></div>`;
 
-    let evHtml=evs.map(ev=>{
+    let evHtml=evs.map((ev, i) => {
+        const { col, totalCols } = layout[i] || { col:0, totalCols:1 };
         const sh=ev.startDt.getHours()+ev.startDt.getMinutes()/60;
         const eh=ev.endDt.getHours()+ev.endDt.getMinutes()/60;
         const top=(sh-SH)*HPX, height=Math.max((eh-sh)*HPX,32);
         const c=getColor(ev.summary);
-        return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${c.bg};color:${c.text};border-left:4px solid ${c.border};font-size:13px"
-            onclick="showPopup(event,'${esc(ev.summary)}','${ev.start}','${ev.end}',${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},'${c.border}')">
+        const pct = 100 / totalCols;
+        const leftPct = col * pct;
+        const widthPct = pct - 0.5;
+        const gBadge = (ev.groups||[]).length ? (ev.groups||[]).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('') : '';
+
+        return `<div class="cal-event"
+            style="top:${top}px;height:${height}px;
+                   left:${leftPct}%;width:${widthPct}%;
+                   background:${c.bg};color:${c.text};border-left:4px solid ${c.border};font-size:13px"
+            onclick="showPopup(event,${JSON.stringify(ev.summary)},${JSON.stringify(ev.start)},${JSON.stringify(ev.end)},${JSON.stringify(ev.teachers||[])},${JSON.stringify(ev.groups||[])},${JSON.stringify(ev.description||'')},'${c.border}')">
             <div class="cal-event-time" style="font-size:11px">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
             <div class="cal-event-title" style="font-size:14px">${esc(ev.summary)}</div>
-            ${(ev.teachers||[]).length?`<div style="font-size:12px;opacity:0.75"><i class="bi bi-person"></i> ${esc((ev.teachers||[]).join(', '))}</div>`:''}
+            ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
+            ${(ev.teachers||[]).length?`<div class="cal-event-sub"><i class="bi bi-person"></i> ${esc((ev.teachers||[]).join(', '))}</div>`:''}
         </div>`;
     }).join('');
 
@@ -378,7 +556,7 @@ function renderDay() {
         </div>
         <div class="day-view-body">
             ${timeCol}
-            <div style="position:relative">${slots}<div style="position:absolute;inset:0"><div style="position:relative">${evHtml}</div></div></div>
+            <div style="position:relative">${slots}<div style="position:absolute;inset:0;overflow:hidden"><div style="position:relative;height:100%">${evHtml}</div></div></div>
         </div>
     </div>`;
     const body=cal.querySelector('.day-view-body');
@@ -386,13 +564,23 @@ function renderDay() {
 }
 
 // ── POPUP ──
-function showPopup(e, title, start, end, teachers, groups, color) {
+function showPopup(e, title, start, end, teachers, groups, description, color) {
     e.stopPropagation();
     const popup=document.getElementById('event-popup');
     const startDt=new Date(start), endDt=new Date(end);
     const dateStr=`${DAYS_L[startDt.getDay()]} ${startDt.getDate()} ${MONTHS[startDt.getMonth()]} ${startDt.getFullYear()}`;
     const dur=Math.round((endDt-startDt)/60000);
     const durStr=dur>=60?`${Math.floor(dur/60)}h${dur%60>0?fmt2(dur%60):''}`:dur+' min';
+
+    // Description formatée (pipe → tirets ou retour ligne)
+    const descHtml = description
+        ? `<div class="popup-row"><i class="bi bi-info-circle"></i><div class="popup-desc">${esc(description).replace(/\|/g, '<br>')}</div></div>`
+        : '';
+
+    // Groupes
+    const groupHtml = groups && groups.length
+        ? `<div class="popup-row"><i class="bi bi-people"></i><div>${groups.map(g=>`<span class="popup-badge" style="background:${color}22;color:${color}">${esc(g)}</span>`).join('')}</div></div>`
+        : '';
 
     popup.innerHTML=`
         <div class="popup-bar" style="background:${color}"></div>
@@ -401,14 +589,15 @@ function showPopup(e, title, start, end, teachers, groups, color) {
         <div class="popup-row"><i class="bi bi-calendar3"></i><div>${dateStr}</div></div>
         <div class="popup-row"><i class="bi bi-clock"></i><div><strong>${fmtTime(startDt)} – ${fmtTime(endDt)}</strong> <span style="color:var(--text-3)">(${durStr})</span></div></div>
         ${teachers&&teachers.length?`<div class="popup-row"><i class="bi bi-person"></i><div>${esc(teachers.join(' / '))}</div></div>`:''}
-        ${groups&&groups.length?`<div class="popup-row"><i class="bi bi-people"></i><div>${groups.map(g=>`<span class="popup-badge" style="background:${color}22;color:${color}">${esc(g)}</span>`).join('')}</div></div>`:''}
+        ${groupHtml}
+        ${descHtml}
     `;
 
     const tgt=e.target.closest('.cal-event,.month-event');
     const rect=tgt?tgt.getBoundingClientRect():{left:e.clientX,top:e.clientY,right:e.clientX};
     let left=rect.right+8, top=rect.top;
-    if(left+310>window.innerWidth) left=rect.left-310;
-    if(top+260>window.innerHeight) top=window.innerHeight-270;
+    if(left+330>window.innerWidth) left=rect.left-330;
+    if(top+320>window.innerHeight) top=window.innerHeight-330;
     if(top<70) top=70;
     popup.style.left=`${left}px`; popup.style.top=`${top}px`;
     popup.style.display='block';
