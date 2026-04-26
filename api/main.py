@@ -140,14 +140,22 @@ def get_merged_map(xls_fileobj, sheet_name):
 
 
 def find_week_rows(df):
+    """
+    Détecte les lignes "semaine" en colonne A.
+    Supporte deux formats :
+      - Ancien : "S40", "S 40", "S.40" (string commençant par S + chiffre)
+      - Nouveau : entier seul (40, 41, 1, 2... entre 1 et 53)
+    """
     result = []
     for i in range(len(df)):
         val = df.iat[i, 0]
         if val is None:
             continue
+        # Cas 1 : format "S40", "S 40", "S.40"
         if isinstance(val, str) and re.match(r'^\s*S\s*\.?\s*\d+', val.strip(), re.I):
             result.append(i)
             continue
+        # Cas 2 : entier seul représentant un numéro de semaine (1-53)
         if isinstance(val, (int, float)) and not isinstance(val, bool):
             try:
                 n = int(val)
@@ -168,6 +176,7 @@ def find_slot_rows(df):
 
 def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dict]:
     file_io = io.BytesIO(file_content)
+
     try:
         df = pd.read_excel(file_io, sheet_name=sheet_name, header=None)
     except ValueError:
@@ -179,12 +188,15 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
 
     file_io.seek(0)
     merged_map = get_merged_map(file_io, sheet_name)
+
     nrows, ncols = df.shape
     s_rows = find_week_rows(df)
     h_rows = find_slot_rows(df)
+
     log_msg(f"[{sheet_name}] Semaines trouvées: {len(s_rows)}, Créneaux trouvés: {len(h_rows)}")
 
     raw_events = []
+
     for r in h_rows:
         p_candidates = [s for s in s_rows if s <= r]
         if not p_candidates:
@@ -192,12 +204,17 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         p = max(p_candidates)
         date_row = p + 1
         group_row = p + 2
-        date_cols = [c for c in range(ncols) if date_row < nrows and to_date(df.iat[date_row, c]) is not None]
+
+        date_cols = [
+            c for c in range(ncols)
+            if date_row < nrows and to_date(df.iat[date_row, c]) is not None
+        ]
 
         for c in date_cols:
             for col in (c, c + 1):
                 if col >= ncols:
                     continue
+
                 summary = df.iat[r, col]
                 if pd.isna(summary) or summary is None:
                     continue
@@ -205,6 +222,7 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if not summary_str:
                     continue
 
+                # Enseignants
                 teachers = []
                 if (r + 2) < nrows:
                     for off in range(2, 6):
@@ -221,6 +239,7 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                             teachers.append(s)
                 teachers = list(dict.fromkeys(teachers))
 
+                # Index de fin
                 stop_idx = None
                 for off in range(1, 12):
                     idx = r + off
@@ -232,6 +251,7 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if stop_idx is None:
                     stop_idx = min(r + 7, nrows)
 
+                # Description
                 desc_parts = []
                 for idx in range(r + 1, stop_idx):
                     if idx >= nrows:
@@ -240,13 +260,16 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                     if pd.isna(cell) or cell is None:
                         continue
                     s = str(cell).strip()
-                    if not s or to_date(cell) is not None:
+                    if not s:
+                        continue
+                    if to_date(cell) is not None:
                         continue
                     if s in teachers or s == summary_str:
                         continue
                     desc_parts.append(s)
                 desc_text = " | ".join(dict.fromkeys(desc_parts))
 
+                # Heures
                 start_val, end_val = None, None
                 for off in range(1, 13):
                     idx = r + off
@@ -262,16 +285,19 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
 
                 if start_val is None or end_val is None:
                     continue
+
                 start_t, end_t = to_time(start_val), to_time(end_val)
                 if start_t is None or end_t is None:
                     continue
 
+                # Construction DateTime
                 d = to_date(df.iat[date_row, c])
                 if d is None:
                     continue
                 dtstart = datetime.combine(d, start_t)
                 dtend = datetime.combine(d, end_t)
 
+                # Groupes
                 gl = normalize_group_label(df.iat[group_row, col] if group_row < nrows else None)
                 gl_next = normalize_group_label(df.iat[group_row, col + 1] if (col + 1) < ncols else None)
                 is_left_col = (col == c)
@@ -280,12 +306,16 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if is_left_col:
                     merged = merged_map.get((r, col))
                     if merged and (r, col + 1) in merged_map:
-                        if gl: groups.add(gl)
-                        if gl_next: groups.add(gl_next)
+                        if gl:
+                            groups.add(gl)
+                        if gl_next:
+                            groups.add(gl_next)
                     else:
-                        if gl: groups.add(gl)
+                        if gl:
+                            groups.add(gl)
                 else:
-                    if gl: groups.add(gl)
+                    if gl:
+                        groups.add(gl)
 
                 raw_events.append({
                     'summary': summary_str,
@@ -296,15 +326,24 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                     'groups': groups
                 })
 
+    # Fusion des événements identiques
     merged = {}
     for e in raw_events:
         key = (e['summary'], e['start'], e['end'])
         if key not in merged:
-            merged[key] = {'summary': e['summary'], 'teachers': set(), 'descriptions': set(), 'start': e['start'], 'end': e['end'], 'groups': set()}
+            merged[key] = {
+                'summary': e['summary'],
+                'teachers': set(),
+                'descriptions': set(),
+                'start': e['start'],
+                'end': e['end'],
+                'groups': set()
+            }
         merged[key]['teachers'].update(e.get('teachers', set()))
         merged[key]['descriptions'].update(e.get('descriptions', set()))
         merged[key]['groups'].update(e.get('groups', set()))
 
+    # Conversion JSON serializable
     final_list = []
     for v in merged.values():
         final_list.append({
@@ -315,29 +354,8 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
             'end': v['end'].isoformat(),
             'groups': sorted(list(v['groups']))
         })
+
     return final_list
-
-
-def parse_maquette_sheet(file_content: bytes, sheet_name: str) -> List[dict]:
-    """Parse la feuille Maquette : col C (idx 2) = Matière, col M (idx 12) = Cible heures."""
-    try:
-        df = pd.read_excel(io.BytesIO(file_content), sheet_name=sheet_name, header=None)
-    except Exception as e:
-        log_msg(f"Erreur lecture maquette: {e}")
-        return []
-    rows = []
-    if df.shape[1] > 12:
-        for i in range(len(df)):
-            subj = df.iat[i, 2]
-            tgt = df.iat[i, 12]
-            if pd.notna(subj) and str(subj).strip():
-                try:
-                    val = float(tgt)
-                except Exception:
-                    val = None
-                rows.append({'subject': str(subj).strip(), 'target': val})
-    return rows
-
 
 # ==========================================
 # 3. GENERATEUR ICS
@@ -353,55 +371,93 @@ def escape_ical_text(s: str) -> str:
 
 def build_paris_vtimezone_text():
     return "\n".join([
-        "BEGIN:VTIMEZONE", "TZID:Europe/Paris", "X-LIC-LOCATION:Europe/Paris",
-        "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST",
-        "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
-        "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET",
-        "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
+        "BEGIN:VTIMEZONE",
+        "TZID:Europe/Paris",
+        "X-LIC-LOCATION:Europe/Paris",
+        "BEGIN:DAYLIGHT",
+        "TZOFFSETFROM:+0100",
+        "TZOFFSETTO:+0200",
+        "TZNAME:CEST",
+        "DTSTART:19700329T020000",
+        "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+        "END:DAYLIGHT",
+        "BEGIN:STANDARD",
+        "TZOFFSETFROM:+0200",
+        "TZOFFSETTO:+0100",
+        "TZNAME:CET",
+        "DTSTART:19701025T030000",
+        "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+        "END:STANDARD",
         "END:VTIMEZONE"
     ])
 
 
 def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
     tz = pytz.timezone(tzname)
-    header = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EDT Export//FR', 'CALSCALE:GREGORIAN']
+
+    header = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//EDT Export//FR',
+        'CALSCALE:GREGORIAN',
+    ]
+
     body = [build_paris_vtimezone_text()]
 
     for ev in events:
         uid = str(uuid.uuid4())
+
         try:
             start_dt = datetime.fromisoformat(ev['start'])
             end_dt = datetime.fromisoformat(ev['end'])
         except ValueError:
             continue
 
-        start_loc = tz.localize(start_dt) if start_dt.tzinfo is None else start_dt.astimezone(tz)
-        end_loc = tz.localize(end_dt) if end_dt.tzinfo is None else end_dt.astimezone(tz)
+        if start_dt.tzinfo is None:
+            start_loc = tz.localize(start_dt)
+        else:
+            start_loc = start_dt.astimezone(tz)
 
-        summary = escape_ical_text(ev.get('summary', ''))
+        if end_dt.tzinfo is None:
+            end_loc = tz.localize(end_dt)
+        else:
+            end_loc = end_dt.astimezone(tz)
 
-        # Préfixe [Promo Groupe] si fourni (export enseignant)
-        prefix = ev.get('_prefix', '')
-        if prefix:
-            summary = escape_ical_text(prefix) + summary
+        dtstart = start_loc.strftime('%Y%m%dT%H%M%S')
+        dtend = end_loc.strftime('%Y%m%dT%H%M%S')
+
+        summary = escape_ical_text(ev['summary'])
 
         desc_lines = []
-        if ev.get('description'): desc_lines.append(ev['description'])
+        if ev.get('description'):
+            desc_lines.append(ev['description'])
+
         teachers = ev.get('teachers', [])
-        if teachers: desc_lines.append('Enseignant(s): ' + ' / '.join(teachers))
+        if teachers:
+            desc_lines.append('Enseignant(s): ' + ' / '.join(teachers))
+
         groups = ev.get('groups', [])
-        if groups: desc_lines.append(('Groupe: ' if len(groups) == 1 else 'Groupes: ') + ' et '.join(groups))
+        if groups:
+            if len(groups) == 1:
+                desc_lines.append('Groupe: ' + groups[0])
+            else:
+                desc_lines.append('Groupes: ' + ' et '.join(groups))
+
         description = escape_ical_text('\n'.join(desc_lines))
 
         body.extend([
-            'BEGIN:VEVENT', f'UID:{uid}',
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
             f'DTSTAMP:{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}',
-            f'DTSTART;TZID={tzname}:{start_loc.strftime("%Y%m%dT%H%M%S")}',
-            f'DTEND;TZID={tzname}:{end_loc.strftime("%Y%m%dT%H%M%S")}',
-            f'SUMMARY:{summary}', f'DESCRIPTION:{description}', 'END:VEVENT'
+            f'DTSTART;TZID={tzname}:{dtstart}',
+            f'DTEND;TZID={tzname}:{dtend}',
+            f'SUMMARY:{summary}',
+            f'DESCRIPTION:{description}',
+            'END:VEVENT'
         ])
 
-    return '\n'.join(header + body + ['END:VCALENDAR'])
+    footer = ['END:VCALENDAR']
+    return '\n'.join(header + body + footer)
 
 # ==========================================
 # 4. ROUTES & AUTH
@@ -416,14 +472,13 @@ def hash_password(password: str):
 
 
 def convert_updated_at(plannings: list) -> list:
+    """Convertit updated_at UTC → heure Europe/Paris pour l'affichage."""
     for p in plannings:
         if p.get("updated_at"):
             try:
-                raw = p["updated_at"].replace("Z", "+00:00")
-                dt = dtparser.parse(raw)
-                if dt.tzinfo is None:
-                    dt = pytz.utc.localize(dt)
-                p["updated_at"] = dt.astimezone(PARIS_TZ).strftime("%Y-%m-%dT%H:%M:%S")
+                dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
+                dt_paris = dt.astimezone(PARIS_TZ)
+                p["updated_at"] = dt_paris.isoformat()
             except Exception:
                 pass
     return plannings
@@ -434,10 +489,17 @@ async def home(request: Request):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
+
     response = supabase.table("plannings").select("slug, name, year, updated_at").execute()
     plannings = convert_updated_at(response.data)
-    return templates.TemplateResponse(request, "index.html", {"user": user, "plannings": plannings})
 
+    return templates.TemplateResponse(request, "index.html", {
+        "user": user,
+        "plannings": plannings
+    })
+
+
+# --- LOGIN / REGISTER ---
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -453,19 +515,37 @@ async def register_page(request: Request):
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     hashed = hash_password(password)
     res = supabase.table("users").select("*").eq("username", username).eq("password_hash", hashed).execute()
+
     if len(res.data) > 0:
         request.session["user"] = username
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"mode": "login", "error": "Identifiants incorrects"})
+    else:
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "login",
+            "error": "Identifiants incorrects"
+        })
 
 
 @app.post("/register")
-async def register_submit(request: Request, username: str = Form(...), password: str = Form(...), verification: str = Form(...)):
+async def register_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    verification: str = Form(...)
+):
     if verification.strip().upper() != "EUROVISION":
-        return templates.TemplateResponse(request, "login.html", {"mode": "register", "error": "Code de vérification incorrect !"})
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Code de vérification incorrect !"
+        })
+
     check = supabase.table("users").select("*").eq("username", username).execute()
     if len(check.data) > 0:
-        return templates.TemplateResponse(request, "login.html", {"mode": "register", "error": "Ce pseudo est déjà pris."})
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Ce pseudo est déjà pris."
+        })
+
     hashed = hash_password(password)
     try:
         supabase.table("users").insert({"username": username, "password_hash": hashed}).execute()
@@ -473,7 +553,10 @@ async def register_submit(request: Request, username: str = Form(...), password:
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
         log_msg(f"Erreur inscription: {e}")
-        return templates.TemplateResponse(request, "login.html", {"mode": "register", "error": "Erreur technique lors de l'inscription."})
+        return templates.TemplateResponse(request, "login.html", {
+            "mode": "register",
+            "error": "Erreur technique lors de l'inscription."
+        })
 
 
 @app.get("/logout")
@@ -482,16 +565,21 @@ async def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
+# --- ACTIONS CALENDRIER ---
+
 @app.post("/create")
 async def create_calendar(request: Request, promo_name: str = Form(...), school_year: str = Form(...)):
     if not get_current_user(request):
         return RedirectResponse("/login")
+
     slug = f"{promo_name}-{school_year}".lower().replace(" ", "-")
+    data = {"slug": slug, "name": promo_name, "year": school_year}
     try:
-        supabase.table("plannings").insert({"slug": slug, "name": promo_name, "year": school_year}).execute()
+        supabase.table("plannings").insert(data).execute()
         log_msg(f"Nouveau planning créé: {slug}")
     except Exception as e:
-        log_msg(f"Erreur création: {e}")
+        log_msg(f"Erreur création (existe probablement déjà): {e}")
+
     return RedirectResponse("/", status_code=303)
 
 
@@ -503,54 +591,51 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     log_msg(f"Début upload pour {slug}")
     content = await file.read()
 
-    maquette_sheet = None
     try:
         xls = pd.ExcelFile(io.BytesIO(content))
         log_msg(f"Feuilles disponibles: {xls.sheet_names}")
-        maquette_sheet = next((s for s in xls.sheet_names if "maquette" in s.lower()), None)
-        log_msg(f"Feuille maquette détectée: {maquette_sheet}")
     except Exception as e:
         log_msg(f"Erreur lecture feuilles: {e}")
 
     events_p1 = parse_sheet_to_events_json(content, "EDT P1")
     events_p2 = parse_sheet_to_events_json(content, "EDT P2")
-    maquette_data = parse_maquette_sheet(content, maquette_sheet) if maquette_sheet else []
 
-    log_msg(f"Events - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)} lignes")
-
-    # Supabase attend un timestamp ISO 8601 — on force UTC
-    now_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}")
 
     try:
-        result = supabase.table("plannings").update({
+        supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
-            "maquette_data": maquette_data,
-            "updated_at": now_utc,
+            "updated_at": datetime.now(PARIS_TZ).isoformat()
         }).eq("slug", slug).execute()
-        log_msg(f"Mise à jour BDD OK - slug={slug}, updated_at={now_utc}, rows={len(result.data)}")
-        if not result.data:
-            log_msg(f"ATTENTION: aucune ligne modifiée pour slug={slug} - vérifier que le slug existe")
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
 
-    return RedirectResponse("/?success=1", status_code=303)
+    return RedirectResponse("/", status_code=303)
 
+
+# --- URL PUBLIQUE POUR OUTLOOK ---
 
 @app.get("/ics/{slug}/{group}.ics")
 async def get_ics_file(slug: str, group: str):
     group_clean = group.upper()
     if group_clean not in ["P1", "P2"]:
         raise HTTPException(404, detail="Groupe inconnu (utiliser P1 ou P2)")
+
     try:
         res = supabase.table("plannings").select(f"events_{group_clean.lower()}").ilike("slug", slug).execute()
+
         if not res.data:
             raise HTTPException(404, detail="Planning introuvable")
+
         events_json = res.data[0].get(f"events_{group_clean.lower()}", []) or []
         ics_content = events_to_ics_string(events_json)
+        filename = f"{slug}_{group_clean}.ics"
+
         return Response(content=ics_content, media_type="text/calendar", headers={
-            "Content-Disposition": f"attachment; filename={slug}_{group_clean}.ics"
+            "Content-Disposition": f"attachment; filename={filename}"
         })
+
     except HTTPException:
         raise
     except Exception as e:
@@ -558,41 +643,7 @@ async def get_ics_file(slug: str, group: str):
         raise HTTPException(500, detail="Erreur interne")
 
 
-@app.get("/ics/{slug}/enseignant/{teacher_name}.ics")
-async def get_ics_teacher(slug: str, teacher_name: str):
-    """ICS personnalisé pour un enseignant, toutes promos confondues."""
-    try:
-        res = supabase.table("plannings").select("events_p1, events_p2, name").ilike("slug", slug).execute()
-        if not res.data:
-            raise HTTPException(404, detail="Planning introuvable")
-        p = res.data[0]
-        planning_name = p.get("name", slug)
-
-        # Décoder le nom (URL-encoded)
-        import urllib.parse
-        teacher_decoded = urllib.parse.unquote(teacher_name)
-
-        matched_events = []
-        for promo_key, promo_label in [("events_p1", "P1"), ("events_p2", "P2")]:
-            for ev in (p.get(promo_key) or []):
-                if teacher_decoded in ev.get("teachers", []):
-                    ev_copy = dict(ev)
-                    # Préfixe [P1 G 1] dans le titre
-                    parts = [promo_label] + ev.get("groups", [])
-                    ev_copy["_prefix"] = f"[{' '.join(parts)}] " if parts else ""
-                    matched_events.append(ev_copy)
-
-        ics_content = events_to_ics_string(matched_events)
-        safe_name = re.sub(r'[^\w\-]', '_', teacher_decoded)
-        return Response(content=ics_content, media_type="text/calendar", headers={
-            "Content-Disposition": f"attachment; filename={slug}_{safe_name}.ics"
-        })
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_msg(f"Erreur ICS enseignant: {e}")
-        raise HTTPException(500, detail="Erreur interne")
-
+# --- VUE PUBLIQUE CALENDRIER (sans login) ---
 
 @app.get("/calendrier/{slug}", response_class=HTMLResponse)
 async def view_calendar(slug: str, request: Request):
@@ -601,7 +652,9 @@ async def view_calendar(slug: str, request: Request):
         raise HTTPException(404, detail="Planning introuvable")
     p = res.data[0]
     return templates.TemplateResponse(request, "calendar_view.html", {
-        "slug": p["slug"], "planning_name": p["name"], "planning_year": p.get("year", ""),
+        "slug": p["slug"],
+        "planning_name": p["name"],
+        "planning_year": p.get("year", ""),
     })
 
 
@@ -620,70 +673,3 @@ async def api_events(slug: str, group: str):
     except Exception as e:
         log_msg(f"Erreur API events: {e}")
         raise HTTPException(500, detail="Erreur interne")
-
-
-# ==========================================
-# 5. PAGE DÉTAIL PLANNING (authentifié)
-# ==========================================
-
-@app.get("/planning/{slug}", response_class=HTMLResponse)
-async def planning_detail(slug: str, request: Request):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
-
-    try:
-        res = supabase.table("plannings").select(
-            "slug, name, year, updated_at, events_p1, events_p2, maquette_data"
-        ).ilike("slug", slug).execute()
-    except Exception as e:
-        log_msg(f"Erreur lecture planning {slug}: {e}")
-        raise HTTPException(500, detail="Erreur interne")
-
-    if not res.data:
-        raise HTTPException(404, detail="Planning introuvable")
-
-    p = res.data[0]
-    if p.get("updated_at"):
-        try:
-            raw = p["updated_at"]
-            # Normalise : remplace Z par +00:00, gère les microsecondes
-            raw = raw.replace("Z", "+00:00")
-            # Python < 3.11 ne gère pas le +00:00 dans fromisoformat pour tous les formats
-            dt = dtparser.parse(raw)
-            if dt.tzinfo is None:
-                dt = pytz.utc.localize(dt)
-            p["updated_at"] = dt.astimezone(PARIS_TZ).strftime("%Y-%m-%dT%H:%M:%S")
-        except Exception as ex:
-            log_msg(f"Erreur parsing updated_at '{p.get('updated_at')}': {ex}")
-
-    events_p1 = p.get("events_p1") or []
-    events_p2 = p.get("events_p2") or []
-    maquette_data = p.get("maquette_data") or []
-
-    all_events = [dict(e, promo="P1") for e in events_p1] + [dict(e, promo="P2") for e in events_p2]
-    teachers_set = sorted(set(t for e in all_events for t in e.get("teachers", []) if t))
-    subjects_set = sorted(set(e["summary"] for e in all_events))
-
-    import unicodedata
-    def norm_exam(s):
-        return unicodedata.normalize('NFD', s.lower()).encode('ascii', 'ignore').decode()
-
-    EXAM_KEYWORDS = re.compile(r'examen|exam|partiel|ds |devoir|evaluation|controle|ccf', re.I)
-    exams_p1 = [e for e in events_p1 if EXAM_KEYWORDS.search(norm_exam(e.get("summary", "")))]
-    exams_p2 = [e for e in events_p2 if EXAM_KEYWORDS.search(norm_exam(e.get("summary", "")))]
-
-    return templates.TemplateResponse(request, "planning_detail.html", {
-        "user": user,
-        "planning": p,
-        "events_p1": events_p1,
-        "events_p2": events_p2,
-        "maquette_data": maquette_data,
-        "teachers": teachers_set,
-        "subjects": subjects_set,
-        "exams_p1": exams_p1,
-        "exams_p2": exams_p2,
-        "total_p1": len(events_p1),
-        "total_p2": len(events_p2),
-        "base_url": str(request.base_url),
-    })
