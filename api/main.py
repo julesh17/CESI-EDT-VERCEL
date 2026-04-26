@@ -477,7 +477,7 @@ def convert_updated_at(plannings: list) -> list:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, filter: str = "all"):
+async def home(request: Request, filter: str = "my"):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
