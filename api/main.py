@@ -419,8 +419,11 @@ def convert_updated_at(plannings: list) -> list:
     for p in plannings:
         if p.get("updated_at"):
             try:
-                dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
-                p["updated_at"] = dt.astimezone(PARIS_TZ).isoformat()
+                raw = p["updated_at"].replace("Z", "+00:00")
+                dt = dtparser.parse(raw)
+                if dt.tzinfo is None:
+                    dt = pytz.utc.localize(dt)
+                p["updated_at"] = dt.astimezone(PARIS_TZ).strftime("%Y-%m-%dT%H:%M:%S")
             except Exception:
                 pass
     return plannings
@@ -515,16 +518,19 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
 
     log_msg(f"Events - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)} lignes")
 
-    now_paris = datetime.now(PARIS_TZ).isoformat()
+    # Supabase attend un timestamp ISO 8601 — on force UTC
+    now_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     try:
         result = supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
             "maquette_data": maquette_data,
-            "updated_at": now_paris,
+            "updated_at": now_utc,
         }).eq("slug", slug).execute()
-        log_msg(f"Mise à jour BDD OK - {len(result.data)} ligne(s) modifiée(s)")
+        log_msg(f"Mise à jour BDD OK - slug={slug}, updated_at={now_utc}, rows={len(result.data)}")
+        if not result.data:
+            log_msg(f"ATTENTION: aucune ligne modifiée pour slug={slug} - vérifier que le slug existe")
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
 
@@ -640,10 +646,16 @@ async def planning_detail(slug: str, request: Request):
     p = res.data[0]
     if p.get("updated_at"):
         try:
-            dt = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
-            p["updated_at"] = dt.astimezone(PARIS_TZ).isoformat()
-        except Exception:
-            pass
+            raw = p["updated_at"]
+            # Normalise : remplace Z par +00:00, gère les microsecondes
+            raw = raw.replace("Z", "+00:00")
+            # Python < 3.11 ne gère pas le +00:00 dans fromisoformat pour tous les formats
+            dt = dtparser.parse(raw)
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            p["updated_at"] = dt.astimezone(PARIS_TZ).strftime("%Y-%m-%dT%H:%M:%S")
+        except Exception as ex:
+            log_msg(f"Erreur parsing updated_at '{p.get('updated_at')}': {ex}")
 
     events_p1 = p.get("events_p1") or []
     events_p2 = p.get("events_p2") or []
@@ -653,9 +665,13 @@ async def planning_detail(slug: str, request: Request):
     teachers_set = sorted(set(t for e in all_events for t in e.get("teachers", []) if t))
     subjects_set = sorted(set(e["summary"] for e in all_events))
 
-    EXAM_KEYWORDS = re.compile(r'examen|exam|partiel|ds |devoir|évaluation|evaluation|contrôle|controle|ccf', re.I)
-    exams_p1 = [e for e in events_p1 if EXAM_KEYWORDS.search(e.get("summary", ""))]
-    exams_p2 = [e for e in events_p2 if EXAM_KEYWORDS.search(e.get("summary", ""))]
+    import unicodedata
+    def norm_exam(s):
+        return unicodedata.normalize('NFD', s.lower()).encode('ascii', 'ignore').decode()
+
+    EXAM_KEYWORDS = re.compile(r'examen|exam|partiel|ds |devoir|evaluation|controle|ccf', re.I)
+    exams_p1 = [e for e in events_p1 if EXAM_KEYWORDS.search(norm_exam(e.get("summary", "")))]
+    exams_p2 = [e for e in events_p2 if EXAM_KEYWORDS.search(norm_exam(e.get("summary", "")))]
 
     return templates.TemplateResponse(request, "planning_detail.html", {
         "user": user,
