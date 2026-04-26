@@ -140,22 +140,14 @@ def get_merged_map(xls_fileobj, sheet_name):
 
 
 def find_week_rows(df):
-    """
-    Détecte les lignes "semaine" en colonne A.
-    Supporte deux formats :
-      - Ancien : "S40", "S 40", "S.40" (string commençant par S + chiffre)
-      - Nouveau : entier seul (40, 41, 1, 2... entre 1 et 53)
-    """
     result = []
     for i in range(len(df)):
         val = df.iat[i, 0]
         if val is None:
             continue
-        # Cas 1 : format "S40", "S 40", "S.40"
         if isinstance(val, str) and re.match(r'^\s*S\s*\.?\s*\d+', val.strip(), re.I):
             result.append(i)
             continue
-        # Cas 2 : entier seul représentant un numéro de semaine (1-53)
         if isinstance(val, (int, float)) and not isinstance(val, bool):
             try:
                 n = int(val)
@@ -485,17 +477,25 @@ def convert_updated_at(plannings: list) -> list:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, filter: str = "all"):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    response = supabase.table("plannings").select("slug, name, year, updated_at").execute()
+    # Récupération de la colonne creator en plus
+    query = supabase.table("plannings").select("slug, name, year, updated_at, creator")
+    
+    # Application du filtre si demandé
+    if filter == "my":
+        query = query.eq("creator", user)
+        
+    response = query.execute()
     plannings = convert_updated_at(response.data)
 
     return templates.TemplateResponse(request, "index.html", {
         "user": user,
-        "plannings": plannings
+        "plannings": plannings,
+        "current_filter": filter # On passe le filtre à la vue
     })
 
 
@@ -569,14 +569,16 @@ async def logout(request: Request):
 
 @app.post("/create")
 async def create_calendar(request: Request, promo_name: str = Form(...), school_year: str = Form(...)):
-    if not get_current_user(request):
+    user = get_current_user(request)
+    if not user:
         return RedirectResponse("/login")
 
     slug = f"{promo_name}-{school_year}".lower().replace(" ", "-")
-    data = {"slug": slug, "name": promo_name, "year": school_year}
+    # Ajout du creator lors de la création
+    data = {"slug": slug, "name": promo_name, "year": school_year, "creator": user}
     try:
         supabase.table("plannings").insert(data).execute()
-        log_msg(f"Nouveau planning créé: {slug}")
+        log_msg(f"Nouveau planning créé: {slug} par {user}")
     except Exception as e:
         log_msg(f"Erreur création (existe probablement déjà): {e}")
 
