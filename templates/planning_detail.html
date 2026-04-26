@@ -254,7 +254,7 @@
         <div class="tab-pane fade" id="tab-maquette">
             <div class="panel">
                 <span class="cesi-tag">Suivi pédagogique</span>
-                {% if planning.maquette_data and planning.maquette_data|length > 0 %}
+                {% if maquette_data and maquette_data|length > 0 %}
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
                         <label class="form-label fw-semibold" style="font-size:12px;">Groupe</label>
@@ -721,13 +721,28 @@ function renderVolume() {
 // ───────────────────────────────────────────
 // TAB 4 : EXAMENS
 // ───────────────────────────────────────────
-const EXAM_RE = /examen|exam|partiel|ds |devoir|évaluation|evaluation|contrôle|controle|ccf/i;
+// Examens détectés côté serveur (filtrés par Python, plus fiables)
+const EXAMS_P1 = {{ exams_p1 | tojson }};
+const EXAMS_P2 = {{ exams_p2 | tojson }};
 
 function initExams() {
-    ['p1','p2'].forEach(g => {
-        const evs = getEvents(g).filter(e =>
-            EXAM_RE.test(e.summary) || EXAM_RE.test(e.description || '')
-        );
+    [['p1', EXAMS_P1], ['p2', EXAMS_P2]].forEach(([g, serverExams]) => {
+        // On utilise les examens détectés côté serveur en priorité
+        // Fallback JS avec regex large si le serveur n'en a pas trouvé
+        let evs = serverExams && serverExams.length > 0 ? serverExams : [];
+
+        if (!evs.length) {
+            // Fallback : regex JS élargie, insensible aux accents
+            evs = getEvents(g).filter(e => {
+                const s = (e.summary || '').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const d = (e.description || '').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return /examen|exam|partiel|ds |devoir|evaluation|controle|ccf/.test(s)
+                    || /examen|exam|partiel|ds |devoir|evaluation|controle|ccf/.test(d);
+            });
+        }
+
         const el = document.getElementById(`exams${g.toUpperCase()}`);
         if (!evs.length) {
             el.innerHTML = '<p class="text-muted small">Aucun examen détecté.</p>';
@@ -738,7 +753,7 @@ function initExams() {
                 <td>${fmtDate(e.start)}</td>
                 <td>${fmtHour(e.start)} – ${fmtHour(e.end)}</td>
                 <td class="fw-semibold">${e.summary}</td>
-                <td class="text-muted" style="font-size:12px;">${e.teachers.join(', ') || '—'}</td>
+                <td class="text-muted" style="font-size:12px;">${(e.teachers||[]).join(', ') || '—'}</td>
             </tr>`).join('');
         el.innerHTML = `<table class="table"><thead><tr><th>Date</th><th>Horaire</th><th>Matière</th><th>Enseignant</th></tr></thead><tbody>${rows}</tbody></table>`;
     });
