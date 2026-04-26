@@ -378,7 +378,13 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
         start_loc = tz.localize(start_dt) if start_dt.tzinfo is None else start_dt.astimezone(tz)
         end_loc = tz.localize(end_dt) if end_dt.tzinfo is None else end_dt.astimezone(tz)
 
-        summary = escape_ical_text(ev['summary'])
+        summary = escape_ical_text(ev.get('summary', ''))
+
+        # Préfixe [Promo Groupe] si fourni (export enseignant)
+        prefix = ev.get('_prefix', '')
+        if prefix:
+            summary = escape_ical_text(prefix) + summary
+
         desc_lines = []
         if ev.get('description'): desc_lines.append(ev['description'])
         teachers = ev.get('teachers', [])
@@ -499,6 +505,7 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
         xls = pd.ExcelFile(io.BytesIO(content))
         log_msg(f"Feuilles disponibles: {xls.sheet_names}")
         maquette_sheet = next((s for s in xls.sheet_names if "maquette" in s.lower()), None)
+        log_msg(f"Feuille maquette détectée: {maquette_sheet}")
     except Exception as e:
         log_msg(f"Erreur lecture feuilles: {e}")
 
@@ -508,13 +515,16 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
 
     log_msg(f"Events - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)} lignes")
 
+    now_paris = datetime.now(PARIS_TZ).isoformat()
+
     try:
-        supabase.table("plannings").update({
+        result = supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
             "maquette_data": maquette_data,
-            "updated_at": datetime.now(PARIS_TZ).isoformat()
+            "updated_at": now_paris,
         }).eq("slug", slug).execute()
+        log_msg(f"Mise à jour BDD OK - {len(result.data)} ligne(s) modifiée(s)")
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
 
@@ -539,6 +549,42 @@ async def get_ics_file(slug: str, group: str):
         raise
     except Exception as e:
         log_msg(f"Erreur ICS generation: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.get("/ics/{slug}/enseignant/{teacher_name}.ics")
+async def get_ics_teacher(slug: str, teacher_name: str):
+    """ICS personnalisé pour un enseignant, toutes promos confondues."""
+    try:
+        res = supabase.table("plannings").select("events_p1, events_p2, name").ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404, detail="Planning introuvable")
+        p = res.data[0]
+        planning_name = p.get("name", slug)
+
+        # Décoder le nom (URL-encoded)
+        import urllib.parse
+        teacher_decoded = urllib.parse.unquote(teacher_name)
+
+        matched_events = []
+        for promo_key, promo_label in [("events_p1", "P1"), ("events_p2", "P2")]:
+            for ev in (p.get(promo_key) or []):
+                if teacher_decoded in ev.get("teachers", []):
+                    ev_copy = dict(ev)
+                    # Préfixe [P1 G 1] dans le titre
+                    parts = [promo_label] + ev.get("groups", [])
+                    ev_copy["_prefix"] = f"[{' '.join(parts)}] " if parts else ""
+                    matched_events.append(ev_copy)
+
+        ics_content = events_to_ics_string(matched_events)
+        safe_name = re.sub(r'[^\w\-]', '_', teacher_decoded)
+        return Response(content=ics_content, media_type="text/calendar", headers={
+            "Content-Disposition": f"attachment; filename={slug}_{safe_name}.ics"
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur ICS enseignant: {e}")
         raise HTTPException(500, detail="Erreur interne")
 
 
