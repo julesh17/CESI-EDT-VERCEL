@@ -131,7 +131,6 @@
             font-size: 24px;
             font-weight: 700;
             letter-spacing: -0.5px;
-            margin-bottom: 20px;
         }
 
         .btn-view {
@@ -204,7 +203,6 @@
     </div>
     {% endif %}
 
-    <!-- Créer un nouveau planning -->
     <div class="card card-apple mb-5 fade-in-up">
         <div class="card-body-clean d-flex flex-column flex-md-row align-items-center justify-content-between p-4">
             <div class="mb-3 mb-md-0">
@@ -223,18 +221,32 @@
         </div>
     </div>
 
-    <h3 class="section-title fade-in-up delay-1">Vos Promotions</h3>
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center mb-4 fade-in-up delay-1">
+        <h3 class="section-title mb-3 mb-sm-0">Vos Promotions</h3>
+        <div class="d-flex gap-2">
+            <a href="/?filter=all" class="btn btn-sm {% if current_filter != 'my' %}btn-primary-apple{% else %}btn-view{% endif %}" style="padding: 6px 14px; border-radius: 20px;">
+                Tous
+            </a>
+            <a href="/?filter=my" class="btn btn-sm {% if current_filter == 'my' %}btn-primary-apple{% else %}btn-view{% endif %}" style="padding: 6px 14px; border-radius: 20px;">
+                Mes créations
+            </a>
+        </div>
+    </div>
 
     <div class="row">
         {% for p in plannings %}
         <div class="col-lg-6 col-xl-4 mb-4 fade-in-up delay-2">
             <div class="card card-apple h-100">
 
-                <!-- En-tête -->
                 <div class="card-header-clean d-flex justify-content-between align-items-start">
                     <div>
                         <h4 class="fw-bold mb-0 text-uppercase" style="letter-spacing: -0.5px;">{{ p.name }}</h4>
-                        <span class="badge-year mt-1 d-inline-block">{{ p.year }}</span>
+                        <div class="d-flex gap-2 mt-1">
+                            <span class="badge-year d-inline-block">{{ p.year }}</span>
+                            <span class="badge-year d-inline-block" title="Créateur">
+                                <i class="bi bi-person-fill"></i> {{ p.creator or 'julesh17' }}
+                            </span>
+                        </div>
                     </div>
                     <div class="text-end">
                         <small class="d-block text-muted" style="font-size: 10px; font-weight: 600; text-transform: uppercase;">Mise à jour</small>
@@ -249,10 +261,8 @@
                     </div>
                 </div>
 
-                <!-- Corps -->
                 <div class="card-body-clean">
 
-                    <!-- Lien ICS P1 -->
                     <div class="mb-3">
                         <label class="small text-muted fw-bold mb-1 d-block" style="font-size: 11px;">GROUPE P1</label>
                         <div class="input-group-code">
@@ -265,7 +275,6 @@
                         </div>
                     </div>
 
-                    <!-- Lien ICS P2 -->
                     <div class="mb-4">
                         <label class="small text-muted fw-bold mb-1 d-block" style="font-size: 11px;">GROUPE P2</label>
                         <div class="input-group-code">
@@ -278,7 +287,6 @@
                         </div>
                     </div>
 
-                    <!-- Upload Excel -->
                     <form action="/upload/{{ p.slug }}" method="post" enctype="multipart/form-data">
                         <label class="small text-muted fw-bold mb-2 d-flex align-items-center" style="font-size: 11px;">
                             <i class="bi bi-file-earmark-spreadsheet me-1"></i> METTRE À JOUR (.xlsx)
@@ -293,7 +301,6 @@
                         </div>
                     </form>
 
-                    <!-- Lien calendrier public -->
                     <div class="card-actions">
                         <a href="/calendrier/{{ p.slug }}" target="_blank" class="btn-view">
                             <i class="bi bi-calendar3"></i> Voir le calendrier
@@ -311,6 +318,9 @@
     <div class="text-center py-5 text-muted fade-in-up delay-2">
         <i class="bi bi-calendar-x" style="font-size: 3rem; opacity: 0.3;"></i>
         <p class="mt-3">Aucun planning pour le moment.</p>
+        {% if current_filter == 'my' %}
+        <p class="small">Vous n'avez créé aucun emploi du temps.</p>
+        {% endif %}
     </div>
     {% endif %}
 
