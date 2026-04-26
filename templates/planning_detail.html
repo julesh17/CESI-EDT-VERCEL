@@ -6,7 +6,6 @@
     <title>{{ planning.name }} | EDT CESI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.css" rel="stylesheet">
     <style>
         :root {
             --bg-body: #f5f5f7;
@@ -36,7 +35,6 @@
             font-size: 13px;
             font-weight: 500;
         }
-        /* Hero */
         .planning-hero {
             background: white;
             border-radius: 20px;
@@ -59,7 +57,6 @@
             font-size: 12px;
             font-weight: 700;
         }
-        /* Tabs */
         .nav-tabs-custom {
             border: none;
             gap: 6px;
@@ -87,7 +84,6 @@
             color: white !important;
             border-color: #1d1d1f;
         }
-        /* Card */
         .panel {
             background: white;
             border-radius: 16px;
@@ -95,7 +91,6 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.04);
             margin-top: 1.25rem;
         }
-        /* Metric */
         .metric-card {
             background: var(--bg-body);
             border-radius: 14px;
@@ -104,7 +99,6 @@
         }
         .metric-value { font-size: 1.75rem; font-weight: 800; }
         .metric-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-top: 4px; }
-        /* Form controls */
         .form-select, .form-control {
             border-radius: 10px;
             border: 1.5px solid #e0e0e0;
@@ -114,14 +108,12 @@
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(0,113,227,0.1);
         }
-        /* Table */
         .table { font-size: 13px; }
         .table th { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); border-bottom: 2px solid #f0f0f0; }
         .table td { vertical-align: middle; border-bottom: 1px solid #f8f8f8; }
         .diff-ok { background: #f0fdf4; }
         .diff-warn { background: #fef9ec; }
         .diff-bad { background: #fef2f2; }
-        /* Tag */
         .cesi-tag {
             background: var(--cesi-yellow);
             color: #000;
@@ -133,28 +125,49 @@
             display: inline-block;
             margin-bottom: 1rem;
         }
-        /* Calendar */
-        #fc-calendar { min-height: 500px; }
-        .fc .fc-button-primary { background: #1d1d1f !important; border-color: #1d1d1f !important; border-radius: 8px !important; font-size: 13px !important; }
-        .fc .fc-button-primary:not(:disabled).fc-button-active,
-        .fc .fc-button-primary:not(:disabled):active { background: var(--accent) !important; border-color: var(--accent) !important; }
-        .fc .fc-toolbar-title { font-size: 1rem; font-weight: 700; }
-        /* Group pill toggle */
-        .group-btn { cursor: pointer; border: 2px solid #e0e0e0; border-radius: 8px; padding: 6px 18px; font-weight: 600; font-size: 13px; transition: all .15s; background: white; }
-        .group-btn.active { background: #1d1d1f; color: white; border-color: #1d1d1f; }
-        /* Mail area */
         .mail-preview { font-family: 'Courier New', monospace; font-size: 12.5px; background: #fafafa; border-radius: 10px; border: 1px solid #eee; resize: vertical; }
-        /* Back link */
         .back-link { font-size: 13px; color: var(--text-secondary); text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
         .back-link:hover { color: var(--accent); }
-        /* Fade */
         .fade-in { animation: fadeIn .4s ease; }
         @keyframes fadeIn { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform:none } }
+
+        /* Exclusion tags */
+        .exclude-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f0f0f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 12px;
+            margin: 2px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .exclude-tag.active {
+            background: #1d1d1f;
+            color: white;
+            border-color: #1d1d1f;
+        }
+        .exclude-tag:hover { border-color: var(--accent); }
+
+        /* ICS teacher list */
+        .teacher-ics-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #f0f0f0;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+        .teacher-ics-item:hover { background: #fafafa; }
     </style>
 </head>
 <body>
 
-<!-- NAVBAR -->
 <nav class="navbar navbar-expand-lg fixed-top navbar-glass">
     <div class="container">
         <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="/">
@@ -173,7 +186,6 @@
 </nav>
 
 <div class="container py-4 fade-in">
-    <!-- BACK + HERO -->
     <a href="/" class="back-link mb-3 d-inline-flex"><i class="bi bi-arrow-left"></i> Retour au tableau de bord</a>
     <div class="planning-hero d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div>
@@ -185,7 +197,7 @@
                 {% endif %}
             </div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a href="/ics/{{ planning.slug }}/p1.ics" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
                 <i class="bi bi-download me-1"></i>P1.ics
             </a>
@@ -200,45 +212,31 @@
 
     <!-- TABS -->
     <ul class="nav nav-tabs-custom" id="mainTabs">
-        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-cal"><i class="bi bi-calendar-week me-1"></i>Calendrier</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-recap"><i class="bi bi-bar-chart me-1"></i>Récapitulatifs</a></li>
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-recap"><i class="bi bi-bar-chart me-1"></i>Récapitulatifs</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-maquette"><i class="bi bi-clipboard-check me-1"></i>Maquette</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-mail"><i class="bi bi-envelope me-1"></i>Mails</a></li>
-        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-exams"><i class="bi bi-pencil-square me-1"></i>Examens</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-volume"><i class="bi bi-clock-history me-1"></i>Volume horaire</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-exams"><i class="bi bi-pencil-square me-1"></i>Examens</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-mail"><i class="bi bi-envelope me-1"></i>Mails</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-ics-teacher"><i class="bi bi-person-lines-fill me-1"></i>ICS Enseignants</a></li>
     </ul>
 
     <div class="tab-content">
 
-        <!-- ===== TAB : CALENDRIER ===== -->
-        <div class="tab-pane fade show active" id="tab-cal">
-            <div class="panel">
-                <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-                    <span class="cesi-tag">Calendrier</span>
-                    <div class="d-flex gap-2">
-                        <button class="group-btn active" id="btnP1" onclick="switchGroup('p1')">Groupe P1</button>
-                        <button class="group-btn" id="btnP2" onclick="switchGroup('p2')">Groupe P2</button>
-                    </div>
-                </div>
-                <div id="fc-calendar"></div>
-            </div>
-        </div>
-
         <!-- ===== TAB : RÉCAPITULATIFS ===== -->
-        <div class="tab-pane fade" id="tab-recap">
+        <div class="tab-pane fade show active" id="tab-recap">
             <div class="panel">
                 <span class="cesi-tag">Récapitulatifs par matière / enseignant</span>
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
                         <label class="form-label fw-semibold" style="font-size:12px;">Groupe</label>
-                        <select class="form-select" id="recapGroup" onchange="renderRecap()">
+                        <select class="form-select" id="recapGroup" onchange="onRecapGroupOrModeChange()">
                             <option value="p1">P1</option>
                             <option value="p2">P2</option>
                         </select>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold" style="font-size:12px;">Vue</label>
-                        <select class="form-select" id="recapMode" onchange="renderRecap()">
+                        <select class="form-select" id="recapMode" onchange="onRecapGroupOrModeChange()">
                             <option value="subject">Par Matière</option>
                             <option value="teacher">Par Enseignant</option>
                         </select>
@@ -260,7 +258,7 @@
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
                         <label class="form-label fw-semibold" style="font-size:12px;">Groupe</label>
-                        <select class="form-select" id="mqGroup" onchange="renderMaquette()">
+                        <select class="form-select" id="mqGroup" onchange="populateMqSubgroups()">
                             <option value="p1">P1</option>
                             <option value="p2">P2</option>
                         </select>
@@ -270,9 +268,7 @@
                         <select class="form-select" id="mqSubgroup" onchange="renderMaquette()"></select>
                     </div>
                 </div>
-                <!-- Summary metrics -->
                 <div class="row g-3 mb-4" id="mqMetrics"></div>
-                <!-- Table -->
                 <div class="table-responsive" id="mqTable"></div>
                 {% else %}
                 <div class="alert alert-warning border-0 rounded-3">
@@ -280,6 +276,49 @@
                     Aucune maquette disponible. Veuillez uploader un fichier Excel contenant une feuille "Maquette".
                 </div>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- ===== TAB : VOLUME HORAIRE ===== -->
+        <div class="tab-pane fade" id="tab-volume">
+            <div class="panel">
+                <span class="cesi-tag">Volume Horaire</span>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" style="font-size:12px;">Date début</label>
+                        <input type="date" class="form-control" id="vhStart" onchange="renderVolume()">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold" style="font-size:12px;">Date fin</label>
+                        <input type="date" class="form-control" id="vhEnd" onchange="renderVolume()">
+                    </div>
+                </div>
+                <!-- Matières à exclure -->
+                <div class="mb-4">
+                    <label class="form-label fw-semibold d-block" style="font-size:12px;">MATIÈRES EXCLUES DU CALCUL
+                        <span class="text-muted fw-normal ms-1">(cliquez pour exclure/inclure)</span>
+                    </label>
+                    <div id="vhExcludeContainer"></div>
+                </div>
+                <div class="row g-3 mb-4" id="vhMetrics"></div>
+                <div class="table-responsive" id="vhTable"></div>
+            </div>
+        </div>
+
+        <!-- ===== TAB : EXAMENS ===== -->
+        <div class="tab-pane fade" id="tab-exams">
+            <div class="panel">
+                <span class="cesi-tag">Examens détectés</span>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3">Groupe P1</h6>
+                        <div id="examsP1"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3">Groupe P2</h6>
+                        <div id="examsP2"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -320,39 +359,12 @@
             </div>
         </div>
 
-        <!-- ===== TAB : EXAMENS ===== -->
-        <div class="tab-pane fade" id="tab-exams">
+        <!-- ===== TAB : ICS ENSEIGNANTS ===== -->
+        <div class="tab-pane fade" id="tab-ics-teacher">
             <div class="panel">
-                <span class="cesi-tag">Examens détectés</span>
-                <div class="row g-4" id="examsContent">
-                    <div class="col-md-6">
-                        <h6 class="fw-bold mb-3">Groupe P1</h6>
-                        <div id="examsP1"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="fw-bold mb-3">Groupe P2</h6>
-                        <div id="examsP2"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== TAB : VOLUME HORAIRE ===== -->
-        <div class="tab-pane fade" id="tab-volume">
-            <div class="panel">
-                <span class="cesi-tag">Volume Horaire</span>
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold" style="font-size:12px;">Date début</label>
-                        <input type="date" class="form-control" id="vhStart" onchange="renderVolume()">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold" style="font-size:12px;">Date fin</label>
-                        <input type="date" class="form-control" id="vhEnd" onchange="renderVolume()">
-                    </div>
-                </div>
-                <div class="row g-3 mb-4" id="vhMetrics"></div>
-                <div class="table-responsive" id="vhTable"></div>
+                <span class="cesi-tag">Export ICS par enseignant</span>
+                <p class="text-muted small mb-3">Chaque lien génère un fichier ICS personnel pour l'enseignant, toutes promos confondues. Le titre de chaque séance inclut le préfixe [P1 G 1] pour faciliter la lecture.</p>
+                <div id="teacherIcsList"></div>
             </div>
         </div>
 
@@ -361,10 +373,11 @@
 
 <!-- DATA -->
 <script>
-const EVENTS_P1 = {{ planning.events_p1 | tojson }};
-const EVENTS_P2 = {{ planning.events_p2 | tojson }};
-const MAQUETTE  = {{ planning.maquette_data | tojson if planning.maquette_data else '[]' }};
+const EVENTS_P1 = {{ events_p1 | tojson }};
+const EVENTS_P2 = {{ events_p2 | tojson }};
+const MAQUETTE  = {{ maquette_data | tojson if maquette_data else '[]' }};
 const SLUG      = "{{ planning.slug }}";
+const BASE_URL  = "{{ base_url }}";
 
 // ───────────────────────────────────────────
 // UTILS
@@ -394,115 +407,58 @@ function fmtHour(iso) {
     return new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
 }
 
-const IGNORE = new Set(['erasmus day','forum international','période entreprise','férié','mission à l\'international','matière','matières','divers','periode entreprise']);
+const IGNORE_DEFAULT = new Set([
+    'erasmus day','forum international','période entreprise','férié',
+    'mission à l\'international','matière','matières','divers','periode entreprise'
+]);
 
 function normStr(s) {
     return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 }
 
 // ───────────────────────────────────────────
-// TAB 1 : CALENDRIER (FullCalendar)
+// TAB 1 : RÉCAPITULATIFS
+// (bug fix : onchange groupe/mode rebuild filter THEN render)
 // ───────────────────────────────────────────
-let fcCalendar;
-let currentGroup = 'p1';
-
-function evToFC(ev, color) {
-    return {
-        title: ev.summary,
-        start: ev.start,
-        end:   ev.end,
-        extendedProps: { teachers: ev.teachers, groups: ev.groups, description: ev.description },
-        backgroundColor: color,
-        borderColor: color,
-        textColor: '#fff'
-    };
-}
-
-const COLORS = ['#0071e3','#34c759','#ff9f0a','#ff3b30','#af52de','#5ac8fa'];
-function colorForSubject(subj) {
-    let h = 0;
-    for (let i = 0; i < subj.length; i++) h = ((h << 5) - h) + subj.charCodeAt(i);
-    return COLORS[Math.abs(h) % COLORS.length];
-}
-
-function switchGroup(g) {
-    currentGroup = g;
-    document.getElementById('btnP1').classList.toggle('active', g === 'p1');
-    document.getElementById('btnP2').classList.toggle('active', g === 'p2');
-    if (fcCalendar) {
-        fcCalendar.removeAllEvents();
-        fcCalendar.addEventSource(getEvents(g).map(e => evToFC(e, colorForSubject(e.summary))));
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const calEl = document.getElementById('fc-calendar');
-    fcCalendar = new FullCalendar.Calendar(calEl, {
-        initialView: 'timeGridWeek',
-        locale: 'fr',
-        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
-        slotMinTime: '07:00:00',
-        slotMaxTime: '20:00:00',
-        allDaySlot: false,
-        height: 600,
-        nowIndicator: true,
-        eventClick: function(info) {
-            const p = info.event.extendedProps;
-            const lines = [
-                `📚 ${info.event.title}`,
-                p.teachers?.length ? `👤 ${p.teachers.join(', ')}` : '',
-                p.groups?.length   ? `👥 ${p.groups.join(', ')}` : '',
-                p.description      ? `📝 ${p.description}` : '',
-            ].filter(Boolean).join('\n');
-            alert(lines);
-        },
-        events: getEvents('p1').map(e => evToFC(e, colorForSubject(e.summary)))
-    });
-    fcCalendar.render();
-
-    initExams();
-    initVolume();
-    updateTeacherList();
-    {% if planning.maquette_data and planning.maquette_data|length > 0 %}
-    initMaquette();
-    {% endif %}
-    initRecap();
-});
-
-// ───────────────────────────────────────────
-// TAB 2 : RÉCAPITULATIFS
-// ───────────────────────────────────────────
-function initRecap() {
-    renderRecapFilter();
+function onRecapGroupOrModeChange() {
+    buildRecapFilter();
     renderRecap();
 }
 
-function renderRecapFilter() {
-    const mode = document.getElementById('recapMode').value;
+function buildRecapFilter() {
+    const mode  = document.getElementById('recapMode').value;
     const group = document.getElementById('recapGroup').value;
-    const evs = getEvents(group);
-    const sel = document.getElementById('recapFilter');
-    sel.innerHTML = '';
+    const evs   = getEvents(group);
+    const sel   = document.getElementById('recapFilter');
+    const current = sel.value; // try to preserve selection
 
     let items = [];
     if (mode === 'subject') {
         items = [...new Set(evs.map(e => e.summary))].sort();
     } else {
-        items = [...new Set(evs.flatMap(e => e.teachers))].sort();
+        items = [...new Set(evs.flatMap(e => e.teachers))].filter(Boolean).sort();
     }
+
+    sel.innerHTML = '';
     items.forEach(it => {
         const o = document.createElement('option');
         o.value = o.textContent = it;
+        if (it === current) o.selected = true;
         sel.appendChild(o);
     });
 }
 
 function renderRecap() {
-    renderRecapFilter();
-    const mode    = document.getElementById('recapMode').value;
-    const group   = document.getElementById('recapGroup').value;
-    const filter  = document.getElementById('recapFilter').value;
-    const evs     = getEvents(group).filter(e =>
+    const mode   = document.getElementById('recapMode').value;
+    const group  = document.getElementById('recapGroup').value;
+    const filter = document.getElementById('recapFilter').value;
+
+    if (!filter) {
+        document.getElementById('recapTable').innerHTML = '<p class="text-muted">Aucune donnée.</p>';
+        return;
+    }
+
+    const evs = getEvents(group).filter(e =>
         mode === 'subject' ? e.summary === filter : e.teachers.includes(filter)
     );
 
@@ -538,13 +494,8 @@ function renderRecap() {
 }
 
 // ───────────────────────────────────────────
-// TAB 3 : MAQUETTE
+// TAB 2 : MAQUETTE
 // ───────────────────────────────────────────
-function initMaquette() {
-    populateMqSubgroups();
-    renderMaquette();
-}
-
 function getSubgroups(group) {
     const evs = getEvents(group);
     const grps = [...new Set(evs.flatMap(e => e.groups))].filter(Boolean).sort();
@@ -570,12 +521,10 @@ function renderMaquette() {
     const subgroup = document.getElementById('mqSubgroup').value || null;
     const evs      = getEvents(group);
 
-    // Totals per subject
     const totals = {};
     evs.forEach(ev => {
         const s = ev.summary;
-        if (IGNORE.has(normStr(s))) return;
-        // group filter
+        if (IGNORE_DEFAULT.has(normStr(s))) return;
         if (subgroup && subgroup !== 'Promo entière' && ev.groups.length > 0) {
             const norm = g => g.trim().toUpperCase().replace(/\s/g,'');
             if (!ev.groups.some(g => norm(g) === norm(subgroup))) return;
@@ -583,9 +532,8 @@ function renderMaquette() {
         totals[s] = (totals[s] || 0) + durH(ev);
     });
 
-    // Build rows from maquette order
     let totalExpected = 0, totalEntered = 0;
-    const rows = MAQUETTE.filter(m => !IGNORE.has(normStr(m.subject))).map(m => {
+    const rows = MAQUETTE.filter(m => !IGNORE_DEFAULT.has(normStr(m.subject))).map(m => {
         const entered = totals[m.subject] || 0;
         const target  = m.target;
         const diff    = target != null ? entered - target : null;
@@ -605,7 +553,6 @@ function renderMaquette() {
         </tr>`;
     }).join('');
 
-    // Metrics
     const delta = totalEntered - totalExpected;
     document.getElementById('mqMetrics').innerHTML = `
         <div class="col-4"><div class="metric-card">
@@ -639,116 +586,10 @@ function renderMaquette() {
 }
 
 // ───────────────────────────────────────────
-// TAB 4 : MAILS
+// TAB 3 : VOLUME HORAIRE avec exclusions
 // ───────────────────────────────────────────
-function updateTeacherList() {
-    const group = document.getElementById('mailGroup').value;
-    let evs = group === 'all' ? allEvents() : getEvents(group).map(e => ({...e, promo: group.toUpperCase()}));
-    const teachers = [...new Set(evs.flatMap(e => e.teachers))].sort();
-    const sel = document.getElementById('mailTeacher');
-    sel.innerHTML = teachers.map(t => `<option>${t}</option>`).join('');
-    generateMail();
-}
+let vhExcluded = new Set();
 
-function generateMail() {
-    const group   = document.getElementById('mailGroup').value;
-    const teacher = document.getElementById('mailTeacher').value;
-    const ton     = document.getElementById('mailTon').value;
-    if (!teacher) return;
-
-    let evs = group === 'all' ? allEvents() : getEvents(group).map(e => ({...e, promo: group.toUpperCase()}));
-    evs = evs.filter(e => e.teachers.includes(teacher)).sort((a,b) => a.start.localeCompare(b.start));
-
-    const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-    const DAYS   = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-
-    const parts = teacher.replace(',','').split(' ');
-    let intro, closing;
-    if (ton === 'tu') {
-        const prenom = parts.length > 1 ? parts[1] : parts[0];
-        intro   = `Bonjour ${prenom},\n\nVoici le récapitulatif de tes interventions :`;
-        closing = 'Bien à toi,';
-    } else {
-        const nom = parts[0];
-        intro   = `Bonjour M./Mme ${nom},\n\nVeuillez trouver ci-dessous le récapitulatif de vos interventions :`;
-        closing = 'Cordialement,';
-    }
-
-    // Group by promo then subject
-    const promos = [...new Set(evs.map(e => e.promo))].sort();
-    let body = '';
-    let totalH = 0;
-
-    promos.forEach(promo => {
-        const promoEvs = evs.filter(e => e.promo === promo);
-        const subjects = [...new Set(promoEvs.map(e => e.summary))].sort();
-        body += `\nPour la promo ${promo} :\n`;
-
-        subjects.forEach(subj => {
-            let sEvs = promoEvs.filter(e => e.summary === subj).sort((a,b) => a.start.localeCompare(b.start));
-            // Merge consecutive
-            const merged = [];
-            if (sEvs.length) {
-                let cur = {...sEvs[0], groups: [...(sEvs[0].groups || [])]};
-                for (let i = 1; i < sEvs.length; i++) {
-                    const nxt = sEvs[i];
-                    if (cur.end === nxt.start) {
-                        cur.end = nxt.end;
-                        cur.groups = [...new Set([...cur.groups, ...(nxt.groups || [])])];
-                    } else { merged.push(cur); cur = {...nxt, groups: [...(nxt.groups || [])]}; }
-                }
-                merged.push(cur);
-            }
-            body += `\nMatière : ${subj}\n`;
-            merged.forEach(ev => {
-                const d = new Date(ev.start);
-                const dayStr = `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
-                const hS = fmtHour(ev.start), hE = fmtHour(ev.end);
-                const dur = durH(ev);
-                totalH += dur;
-                const grpTxt = ev.groups?.length === 1 ? ` (${ev.groups[0]})` : '';
-                body += `- ${dayStr} de ${hS} à ${hE}${grpTxt}\n`;
-            });
-        });
-    });
-
-    document.getElementById('mailPreview').value = `${intro}\n${body}\nTotal planifié : ${totalH.toFixed(0)} heures.\n\n${closing}`;
-}
-
-function copyMail() {
-    const ta = document.getElementById('mailPreview');
-    navigator.clipboard.writeText(ta.value);
-    const btn = event.target.closest('button');
-    const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copié !';
-    setTimeout(() => btn.innerHTML = orig, 2000);
-}
-
-// ───────────────────────────────────────────
-// TAB 5 : EXAMENS
-// ───────────────────────────────────────────
-function initExams() {
-    ['p1','p2'].forEach(g => {
-        const evs = getEvents(g).filter(e => e.description && e.description.toUpperCase().includes('EXAMEN'));
-        const el  = document.getElementById(`exams${g.toUpperCase()}`);
-        if (!evs.length) {
-            el.innerHTML = '<p class="text-muted small">Aucun examen détecté.</p>';
-            return;
-        }
-        const rows = evs.sort((a,b) => a.start.localeCompare(b.start)).map(e => `
-            <tr>
-                <td>${fmtDate(e.start)}</td>
-                <td>${fmtHour(e.start)} – ${fmtHour(e.end)}</td>
-                <td class="fw-semibold">${e.summary}</td>
-                <td class="text-muted" style="font-size:12px;">${e.description}</td>
-            </tr>`).join('');
-        el.innerHTML = `<table class="table"><thead><tr><th>Date</th><th>Horaire</th><th>Matière</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>`;
-    });
-}
-
-// ───────────────────────────────────────────
-// TAB 6 : VOLUME HORAIRE
-// ───────────────────────────────────────────
 function initVolume() {
     const all = allEvents();
     const dates = all.map(e => e.start.slice(0,10)).sort();
@@ -756,7 +597,37 @@ function initVolume() {
         document.getElementById('vhStart').value = dates[0];
         document.getElementById('vhEnd').value   = dates[dates.length-1];
     }
+
+    // Construire la liste des matières avec exclusions par défaut
+    const allSubjects = [...new Set(all.map(e => e.summary))].sort();
+    vhExcluded = new Set(allSubjects.filter(s => IGNORE_DEFAULT.has(normStr(s))));
+
+    buildExcludeUI(allSubjects);
     renderVolume();
+}
+
+function buildExcludeUI(subjects) {
+    const container = document.getElementById('vhExcludeContainer');
+    container.innerHTML = '';
+    subjects.forEach(s => {
+        const tag = document.createElement('span');
+        tag.className = 'exclude-tag' + (vhExcluded.has(s) ? ' active' : '');
+        tag.textContent = s;
+        tag.title = vhExcluded.has(s) ? 'Exclue — cliquez pour inclure' : 'Incluse — cliquez pour exclure';
+        tag.onclick = () => {
+            if (vhExcluded.has(s)) {
+                vhExcluded.delete(s);
+                tag.classList.remove('active');
+                tag.title = 'Incluse — cliquez pour exclure';
+            } else {
+                vhExcluded.add(s);
+                tag.classList.add('active');
+                tag.title = 'Exclue — cliquez pour inclure';
+            }
+            renderVolume();
+        };
+        container.appendChild(tag);
+    });
 }
 
 function renderVolume() {
@@ -766,7 +637,7 @@ function renderVolume() {
 
     const evs = allEvents().filter(e => {
         const d = e.start.slice(0,10);
-        return d >= start && d <= end && !IGNORE.has(normStr(e.summary));
+        return d >= start && d <= end && !vhExcluded.has(e.summary);
     });
 
     if (!evs.length) {
@@ -801,7 +672,6 @@ function renderVolume() {
             </div>
         </div>`).join('');
 
-    // Détail par promo
     const promos = ['P1','P2'];
     const rows = promos.map(promo => {
         const pEvs = evs.filter(e => e.promo === promo);
@@ -840,12 +710,194 @@ function renderVolume() {
                 <th class="text-center">Formateur</th>
             </tr></thead>
             <tbody>${rows}</tbody>
-        </table>`;
+        </table>
+        <p class="text-muted mt-2" style="font-size:11px;">
+            Formation = durée × groupes &nbsp;·&nbsp;
+            Formateur = durée × nb formateurs &nbsp;·&nbsp;
+            Autonomie = séances sans enseignant
+        </p>`;
 }
+
+// ───────────────────────────────────────────
+// TAB 4 : EXAMENS
+// ───────────────────────────────────────────
+const EXAM_RE = /examen|exam|partiel|ds |devoir|évaluation|evaluation|contrôle|controle|ccf/i;
+
+function initExams() {
+    ['p1','p2'].forEach(g => {
+        const evs = getEvents(g).filter(e =>
+            EXAM_RE.test(e.summary) || EXAM_RE.test(e.description || '')
+        );
+        const el = document.getElementById(`exams${g.toUpperCase()}`);
+        if (!evs.length) {
+            el.innerHTML = '<p class="text-muted small">Aucun examen détecté.</p>';
+            return;
+        }
+        const rows = evs.sort((a,b) => a.start.localeCompare(b.start)).map(e => `
+            <tr>
+                <td>${fmtDate(e.start)}</td>
+                <td>${fmtHour(e.start)} – ${fmtHour(e.end)}</td>
+                <td class="fw-semibold">${e.summary}</td>
+                <td class="text-muted" style="font-size:12px;">${e.teachers.join(', ') || '—'}</td>
+            </tr>`).join('');
+        el.innerHTML = `<table class="table"><thead><tr><th>Date</th><th>Horaire</th><th>Matière</th><th>Enseignant</th></tr></thead><tbody>${rows}</tbody></table>`;
+    });
+}
+
+// ───────────────────────────────────────────
+// TAB 5 : MAILS
+// ───────────────────────────────────────────
+function updateTeacherList() {
+    const group = document.getElementById('mailGroup').value;
+    let evs = group === 'all' ? allEvents() : getEvents(group).map(e => ({...e, promo: group.toUpperCase()}));
+    const teachers = [...new Set(evs.flatMap(e => e.teachers))].filter(Boolean).sort();
+    const sel = document.getElementById('mailTeacher');
+    sel.innerHTML = teachers.map(t => `<option>${t}</option>`).join('');
+    generateMail();
+}
+
+function generateMail() {
+    const group   = document.getElementById('mailGroup').value;
+    const teacher = document.getElementById('mailTeacher').value;
+    const ton     = document.getElementById('mailTon').value;
+    if (!teacher) return;
+
+    let evs = group === 'all' ? allEvents() : getEvents(group).map(e => ({...e, promo: group.toUpperCase()}));
+    evs = evs.filter(e => e.teachers.includes(teacher)).sort((a,b) => a.start.localeCompare(b.start));
+
+    const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    const DAYS   = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+
+    const parts = teacher.replace(',','').split(' ');
+    let intro, closing;
+    if (ton === 'tu') {
+        const prenom = parts.length > 1 ? parts[1] : parts[0];
+        intro   = `Bonjour ${prenom},\n\nVoici le récapitulatif de tes interventions :`;
+        closing = 'Bien à toi,';
+    } else {
+        const nom = parts[0];
+        intro   = `Bonjour M./Mme ${nom},\n\nVeuillez trouver ci-dessous le récapitulatif de vos interventions :`;
+        closing = 'Cordialement,';
+    }
+
+    const promos = [...new Set(evs.map(e => e.promo))].sort();
+    let body = '';
+    let totalH = 0;
+
+    promos.forEach(promo => {
+        const promoEvs = evs.filter(e => e.promo === promo);
+        const subjects = [...new Set(promoEvs.map(e => e.summary))].sort();
+        body += `\nPour la promo ${promo} :\n`;
+
+        subjects.forEach(subj => {
+            let sEvs = promoEvs.filter(e => e.summary === subj).sort((a,b) => a.start.localeCompare(b.start));
+            const merged = [];
+            if (sEvs.length) {
+                let cur = {...sEvs[0], groups: [...(sEvs[0].groups || [])]};
+                for (let i = 1; i < sEvs.length; i++) {
+                    const nxt = sEvs[i];
+                    if (cur.end === nxt.start) {
+                        cur.end = nxt.end;
+                        cur.groups = [...new Set([...cur.groups, ...(nxt.groups || [])])];
+                    } else { merged.push(cur); cur = {...nxt, groups: [...(nxt.groups || [])]}; }
+                }
+                merged.push(cur);
+            }
+            body += `\nMatière : ${subj}\n`;
+            merged.forEach(ev => {
+                const d = new Date(ev.start);
+                const dayStr = `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+                const hS = fmtHour(ev.start), hE = fmtHour(ev.end);
+                const dur = durH(ev);
+                totalH += dur;
+                const grpTxt = ev.groups?.length === 1 ? ` (${ev.groups[0]})` : '';
+                body += `- ${dayStr} de ${hS} à ${hE}${grpTxt}\n`;
+            });
+        });
+    });
+
+    document.getElementById('mailPreview').value = `${intro}\n${body}\nTotal planifié : ${totalH.toFixed(0)} heures.\n\n${closing}`;
+}
+
+function copyMail() {
+    const ta = document.getElementById('mailPreview');
+    navigator.clipboard.writeText(ta.value);
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copié !';
+    setTimeout(() => btn.innerHTML = orig, 2000);
+}
+
+// ───────────────────────────────────────────
+// TAB 6 : ICS PAR ENSEIGNANT
+// ───────────────────────────────────────────
+function initTeacherIcs() {
+    const all = allEvents();
+    const teachers = [...new Set(all.flatMap(e => e.teachers))].filter(Boolean).sort();
+    const container = document.getElementById('teacherIcsList');
+
+    if (!teachers.length) {
+        container.innerHTML = '<p class="text-muted">Aucun enseignant détecté.</p>';
+        return;
+    }
+
+    container.innerHTML = teachers.map(t => {
+        const encodedName = encodeURIComponent(t);
+        const url = `${BASE_URL}ics/${SLUG}/enseignant/${encodedName}.ics`;
+        return `<div class="teacher-ics-item">
+            <span class="fw-semibold">${t}</span>
+            <div class="d-flex gap-2 align-items-center">
+                <input type="text" readonly class="form-control form-control-sm"
+                    style="width:340px;font-size:11px;font-family:monospace;color:var(--accent);"
+                    value="${url}" id="tics-${encodedName}">
+                <button class="btn btn-sm btn-outline-secondary" style="border-radius:7px;font-size:12px;"
+                    onclick="copyTeacherLink('${encodedName}', this)" title="Copier le lien">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+                <a href="${url}" class="btn btn-sm" style="background:#1d1d1f;color:white;border-radius:7px;font-size:12px;">
+                    <i class="bi bi-download"></i>
+                </a>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function copyTeacherLink(encodedName, btn) {
+    const el = document.getElementById(`tics-${encodedName}`);
+    navigator.clipboard.writeText(el.value).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
+        setTimeout(() => btn.innerHTML = orig, 2000);
+    });
+}
+
+// ───────────────────────────────────────────
+// INIT
+// ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    // Récap
+    buildRecapFilter();
+    renderRecap();
+
+    // Maquette
+    {% if maquette_data and maquette_data|length > 0 %}
+    populateMqSubgroups();
+    {% endif %}
+
+    // Volume
+    initVolume();
+
+    // Examens
+    initExams();
+
+    // Mail
+    updateTeacherList();
+
+    // ICS enseignants
+    initTeacherIcs();
+});
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.9/locales/fr.global.min.js"></script>
 </body>
 </html>
