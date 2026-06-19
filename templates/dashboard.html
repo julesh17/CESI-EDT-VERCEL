@@ -187,6 +187,7 @@
     <button class="tab-btn" data-tab="exams" onclick="switchTab('exams')"><i class="bi bi-mortarboard"></i> Examens</button>
     <button class="tab-btn" data-tab="exports" onclick="switchTab('exports')"><i class="bi bi-download"></i> Exports</button>
     <button class="tab-btn" data-tab="maquette" onclick="switchTab('maquette')"><i class="bi bi-rulers"></i> Maquette</button>
+    <button class="tab-btn" data-tab="budget" onclick="switchTab('budget')"><i class="bi bi-currency-euro"></i> Budget</button>
 </div>
 
 <div id="global-loading" class="tab-panel active">
@@ -269,8 +270,8 @@
         <div class="panel-card">
             <h3>Par Enseignant</h3>
             <div class="field-group">
-                <label class="field-label">Sélection (un ou plusieurs)</label>
-                <select id="export-teacher-select" multiple size="8" style="width:100%;"></select>
+                <label class="field-label">Enseignant</label>
+                <select id="export-teacher-select" style="width:100%;"></select>
             </div>
             <button class="btn-primary" onclick="generateTeacherIcs()" style="margin-top:10px;">
                 <i class="bi bi-file-earmark-arrow-down"></i> Générer le fichier ICS
@@ -305,6 +306,38 @@
     </div>
 </div>
 
+<!-- ====================== ONGLET BUDGET ====================== -->
+<div id="panel-budget" class="tab-panel">
+    <div class="metrics-row" id="budget-metrics-global"></div>
+
+    <div class="panel-card">
+        <h3>Budget par séance</h3>
+        <div class="inline-fields" style="margin-bottom:14px;">
+            <div class="field-group">
+                <label class="field-label">Promo</label>
+                <div class="pill-group" id="budget-promo-pills"></div>
+            </div>
+        </div>
+        <p style="font-size:12px; color:var(--text-2); margin-bottom:14px;">
+            Montant = Heures × Coefficient (maquette) × Σ tarif(s) horaire(s) des enseignants.
+        </p>
+        <button class="copy-btn" onclick="copyBudgetSeances()"><i class="bi bi-clipboard"></i> Copier le tableau</button>
+        <div class="table-scroll"><table class="data-table" id="budget-seances-table"></table></div>
+    </div>
+
+    <div class="panel-card">
+        <h3>Budget par mois</h3>
+        <p style="font-size:12px; color:var(--text-2); margin-bottom:14px;">Toutes promos combinées (P1 + P2).</p>
+        <button class="copy-btn" onclick="copyBudgetMonth()"><i class="bi bi-clipboard"></i> Copier le tableau</button>
+        <div class="table-scroll"><table class="data-table" id="budget-month-table"></table></div>
+    </div>
+
+    <div class="panel-card">
+        <h3>Budget année scolaire (P1 + P2 combinées)</h3>
+        <div class="metrics-row" id="budget-year-metrics"></div>
+    </div>
+</div>
+
 <script>
 const SLUG = "{{ slug }}";
 const BASE_URL = "{{ request.base_url }}";
@@ -314,15 +347,18 @@ const BASE_URL = "{{ request.base_url }}";
 // DASHBOARD JS — Port de la logique Streamlit (Mails, Récapitulatifs, Examens, Exports, Maquette)
 // ==========================================================
 
-let DATA = { events_p1: [], events_p2: [], maquette_data: [] };
+let DATA = { events_p1: [], events_p2: [], maquette_data: [], teachers_data: [] };
 let ALL_EVENTS_FLAT = [];   // events_p1 + events_p2 avec promo_label
 let TEACHERS_SET = new Set();
 let SUBJECTS_SET = new Set();
+let TEACHER_RATES = {};     // { "NOM, Prénom": tarif_horaire }
+let SUBJECT_COEFF = {};     // { "Matière": coefficient }
 
 let mailTone = 'tutoiement';
 let statsMode = 'subject';
 let statsPromo = 'P1';
 let maquettePromo = 'P1';
+let budgetPromo = 'P1';
 
 const MONTHS_FR = {1:'janvier',2:'février',3:'mars',4:'avril',5:'mai',6:'juin',7:'juillet',8:'août',9:'septembre',10:'octobre',11:'novembre',12:'décembre'};
 const DAYS_FR = {1:'Lundi',2:'Mardi',3:'Mercredi',4:'Jeudi',5:'Vendredi',6:'Samedi',0:'Dimanche'};
@@ -339,6 +375,9 @@ function normStr(s) {
     return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 }
 function durH(ev) { return (ev.endDt - ev.startDt) / 3600000; }
+function fmtEUR(n) {
+    return (n||0).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+}
 
 // ── CHARGEMENT DES DONNEES ──
 async function loadDashboardData() {
@@ -349,6 +388,7 @@ async function loadDashboardData() {
         DATA.events_p1 = (data.events_p1 || []).map(ev => ({...ev, startDt: new Date(ev.start), endDt: new Date(ev.end), promo_label: 'P1'}));
         DATA.events_p2 = (data.events_p2 || []).map(ev => ({...ev, startDt: new Date(ev.start), endDt: new Date(ev.end), promo_label: 'P2'}));
         DATA.maquette_data = data.maquette_data || [];
+        DATA.teachers_data = data.teachers_data || [];
 
         ALL_EVENTS_FLAT = [...DATA.events_p1, ...DATA.events_p2];
         TEACHERS_SET = new Set();
@@ -356,6 +396,16 @@ async function loadDashboardData() {
         for (const e of ALL_EVENTS_FLAT) {
             for (const t of (e.teachers||[])) TEACHERS_SET.add(t);
             SUBJECTS_SET.add(e.summary);
+        }
+
+        TEACHER_RATES = {};
+        for (const t of DATA.teachers_data) {
+            TEACHER_RATES[t.name] = t.hourly_rate || 0;
+        }
+
+        SUBJECT_COEFF = {};
+        for (const m of DATA.maquette_data) {
+            if (m.coeff !== null && m.coeff !== undefined) SUBJECT_COEFF[m.subject] = m.coeff;
         }
     } catch(e) {
         console.error(e);
