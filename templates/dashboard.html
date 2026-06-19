@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ planning_name }} — Tableau de bord</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --surface: #ffffff;
+            --surface-2: #f8f9fb;
+            --border: #e4e7ec;
+            --text: #111827;
+            --text-2: #6b7280;
+            --text-3: #9ca3af;
+            --accent: #2563eb;
+            --cesi-yellow: #f7e34f;
+            --warn-bg: #fff3cd;
+            --error-bg: #f8d7da;
+            --ok-bg: #d1fae5;
+            --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.10);
+            --radius: 14px;
+            --radius-sm: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* HEADER */
+        header {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 0 24px; height: 64px; display: flex; align-items: center;
+            justify-content: space-between; position: sticky; top: 0; z-index: 100;
+            flex-wrap: wrap; gap: 8px;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .logo { height: 32px; }
+        .header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+        .header-subtitle { font-size: 12px; color: var(--text-2); }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .btn-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 14px; border-radius: 10px; border: 1.5px solid var(--border);
+            background: var(--surface-2); color: var(--text-2); font-size: 13px; font-weight: 600;
+            text-decoration: none; transition: all 0.2s;
+        }
+        .btn-back:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* TABS NAV */
+        .tabs-nav {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 0 24px; display: flex; gap: 4px; overflow-x: auto;
+            position: sticky; top: 64px; z-index: 90;
+        }
+        .tab-btn {
+            padding: 14px 18px; border: none; background: transparent; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+            color: var(--text-2); border-bottom: 3px solid transparent; white-space: nowrap;
+            transition: all 0.15s; display: flex; align-items: center; gap: 7px;
+        }
+        .tab-btn:hover { color: var(--text); background: var(--surface-2); }
+        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        .tab-panel { display: none; padding: 24px; max-width: 1400px; margin: 0 auto; }
+        .tab-panel.active { display: block; }
+
+        /* CARDS */
+        .panel-card {
+            background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 20px 24px; margin-bottom: 20px;
+        }
+        .panel-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; letter-spacing: -0.2px; }
+
+        /* METRICS */
+        .metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .metric-card {
+            background: var(--surface); border-radius: 12px; padding: 18px; text-align: center;
+            border: 1px solid var(--border); box-shadow: var(--shadow);
+        }
+        .metric-value { font-size: 26px; font-weight: 800; color: var(--text); }
+        .metric-label { font-size: 11px; font-weight: 600; color: var(--text-2); text-transform: uppercase; margin-top: 4px; letter-spacing: 0.4px; }
+
+        /* FORM ELEMENTS */
+        select, input[type="text"], input[type="date"] {
+            font-family: 'DM Sans', sans-serif; padding: 9px 12px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--surface); font-size: 13px;
+            color: var(--text);
+        }
+        select:focus, input:focus { outline: none; border-color: var(--accent); }
+        label.field-label { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.4px; display: block; margin-bottom: 6px; }
+        .field-group { margin-bottom: 14px; }
+        .inline-fields { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+
+        .btn-primary {
+            background: var(--text); color: white; border: none; border-radius: 10px;
+            padding: 9px 18px; font-weight: 600; font-size: 13px; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+        }
+        .btn-primary:hover { background: var(--accent); transform: translateY(-1px); }
+        .btn-secondary {
+            background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+            border-radius: 10px; padding: 9px 18px; font-weight: 600; font-size: 13px; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* RADIO PILLS */
+        .pill-group { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; border: 1px solid var(--border); }
+        .pill-btn {
+            padding: 7px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer;
+            border: none; background: transparent; color: var(--text-2); transition: all 0.2s;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .pill-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+        /* TABLE */
+        table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.data-table th {
+            text-align: left; padding: 10px 12px; background: var(--surface-2);
+            font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-2);
+            letter-spacing: 0.4px; border-bottom: 1px solid var(--border);
+        }
+        table.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        table.data-table tbody tr:hover { background: var(--surface-2); }
+        table.data-table tbody tr.row-warn { background: var(--warn-bg); }
+        table.data-table tbody tr.row-warn:hover { background: #ffe9a8; }
+        table.data-table tbody tr.row-error { background: var(--error-bg); }
+        table.data-table tbody tr.row-error:hover { background: #f5c2c7; }
+
+        .table-scroll { overflow-x: auto; }
+
+        textarea.mail-preview {
+            width: 100%; min-height: 420px; font-family: 'DM Mono', monospace; font-size: 12.5px;
+            padding: 16px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--surface-2); color: var(--text); line-height: 1.6; resize: vertical;
+        }
+
+        .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-yellow { background: var(--cesi-yellow); color: #000; }
+
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--text-2); }
+        .empty-state i { font-size: 2.4rem; opacity: 0.3; display: block; margin-bottom: 10px; }
+
+        #loading-overlay {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 300px; gap: 12px; color: var(--text-2);
+        }
+        .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .copy-btn {
+            background: #000; color: #fff; border: none; border-radius: 8px;
+            padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+            font-family: 'DM Sans', sans-serif; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .copy-btn:hover { background: var(--accent); }
+
+        @media (max-width: 768px) {
+            header { padding: 8px 12px; height: auto; }
+            .tabs-nav { padding: 0 12px; }
+            .tab-panel { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-left">
+        <img src="https://peoplespheres.com/wp-content/uploads/2024/10/CESI-logo.png" alt="CESI" class="logo">
+        <div>
+            <div class="header-title">{{ planning_name }}</div>
+            <div class="header-subtitle">{{ planning_year }} · Tableau de bord</div>
+        </div>
+    </div>
+    <div class="header-right">
+        <a href="/calendrier/{{ slug }}" target="_blank" class="btn-back"><i class="bi bi-calendar3"></i> Calendrier</a>
+        <a href="/" class="btn-back"><i class="bi bi-arrow-left"></i> Retour</a>
+    </div>
+</header>
+
+<div class="tabs-nav">
+    <button class="tab-btn active" data-tab="mails" onclick="switchTab('mails')"><i class="bi bi-envelope"></i> Mails</button>
+    <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')"><i class="bi bi-bar-chart"></i> Récapitulatifs</button>
+    <button class="tab-btn" data-tab="exams" onclick="switchTab('exams')"><i class="bi bi-mortarboard"></i> Examens</button>
+    <button class="tab-btn" data-tab="exports" onclick="switchTab('exports')"><i class="bi bi-download"></i> Exports</button>
+    <button class="tab-btn" data-tab="maquette" onclick="switchTab('maquette')"><i class="bi bi-rulers"></i> Maquette</button>
+</div>
+
+<div id="global-loading" class="tab-panel active">
+    <div id="loading-overlay"><div class="spinner"></div><span>Chargement des données…</span></div>
+</div>
+
+<!-- ====================== ONGLET MAILS ====================== -->
+<div id="panel-mails" class="tab-panel">
+    <div class="panel-card">
+        <h3>Configuration</h3>
+        <div class="inline-fields">
+            <div class="field-group">
+                <label class="field-label">Destinataire</label>
+                <select id="mail-teacher-select" onchange="renderMailPreview()"></select>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Ton</label>
+                <div class="pill-group">
+                    <button class="pill-btn active" data-tone="tutoiement" onclick="setMailTone('tutoiement')">Tutoiement</button>
+                    <button class="pill-btn" data-tone="vouvoiement" onclick="setMailTone('vouvoiement')">Vouvoiement</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="panel-card" id="mail-preview-card">
+        <h3>Aperçu (texte brut pour mail)</h3>
+        <button class="copy-btn" onclick="copyMailPreview()"><i class="bi bi-clipboard"></i> Copier le texte</button>
+        <textarea id="mail-preview" class="mail-preview" readonly></textarea>
+    </div>
+</div>
+
+<!-- ====================== ONGLET RECAPITULATIFS ====================== -->
+<div id="panel-stats" class="tab-panel">
+    <div class="panel-card">
+        <h3>Analyse</h3>
+        <div class="inline-fields">
+            <div class="field-group">
+                <label class="field-label">Promo</label>
+                <div class="pill-group" id="stats-promo-pills"></div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Vue</label>
+                <div class="pill-group">
+                    <button class="pill-btn active" data-mode="subject" onclick="setStatsMode('subject')">Par Matière</button>
+                    <button class="pill-btn" data-mode="teacher" onclick="setStatsMode('teacher')">Par Enseignant</button>
+                </div>
+            </div>
+            <div class="field-group" id="stats-select-wrap">
+                <label class="field-label" id="stats-select-label">Matière</label>
+                <select id="stats-select" onchange="renderStatsTable()"></select>
+            </div>
+        </div>
+    </div>
+    <div class="panel-card">
+        <div class="table-scroll"><table class="data-table" id="stats-table"></table></div>
+    </div>
+</div>
+
+<!-- ====================== ONGLET EXAMENS ====================== -->
+<div id="panel-exams" class="tab-panel">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+        <div class="panel-card">
+            <h3>Promo P1</h3>
+            <div class="table-scroll"><table class="data-table" id="exams-table-p1"></table></div>
+        </div>
+        <div class="panel-card">
+            <h3>Promo P2</h3>
+            <div class="table-scroll"><table class="data-table" id="exams-table-p2"></table></div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================== ONGLET EXPORTS ====================== -->
+<div id="panel-exports" class="tab-panel">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+        <div class="panel-card">
+            <h3>Par Promo (Global)</h3>
+            <div id="exports-promo-list"></div>
+        </div>
+        <div class="panel-card">
+            <h3>Par Enseignant</h3>
+            <div class="field-group">
+                <label class="field-label">Sélection (un ou plusieurs)</label>
+                <select id="export-teacher-select" multiple size="8" style="width:100%;"></select>
+            </div>
+            <button class="btn-primary" onclick="generateTeacherIcs()" style="margin-top:10px;">
+                <i class="bi bi-file-earmark-arrow-down"></i> Générer le fichier ICS
+            </button>
+            <div id="export-teacher-result" style="margin-top:12px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================== ONGLET MAQUETTE ====================== -->
+<div id="panel-maquette" class="tab-panel">
+    <div class="panel-card">
+        <h3>Suivi pédagogique</h3>
+        <div class="inline-fields">
+            <div class="field-group">
+                <label class="field-label">Comparer Promo</label>
+                <div class="pill-group" id="maquette-promo-pills"></div>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Groupe</label>
+                <select id="maquette-group-select" onchange="renderMaquetteTable()"></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="metrics-row" id="maquette-metrics"></div>
+
+    <div class="panel-card">
+        <h3 id="maquette-table-title">Résultats</h3>
+        <p style="font-size:12px; color:var(--text-2); margin-bottom:14px;">Ordre défini par le fichier Maquette. Les matières ignorées sont masquées.</p>
+        <div class="table-scroll"><table class="data-table" id="maquette-table"></table></div>
+    </div>
+</div>
+
+<script>
+const SLUG = "{{ slug }}";
+const BASE_URL = "{{ request.base_url }}";
+</script>
+<script>
+// ==========================================================
+// DASHBOARD JS — Port de la logique Streamlit (Mails, Récapitulatifs, Examens, Exports, Maquette)
+// ==========================================================
+
+let DATA = { events_p1: [], events_p2: [], maquette_data: [] };
+let ALL_EVENTS_FLAT = [];   // events_p1 + events_p2 avec promo_label
+let TEACHERS_SET = new Set();
+let SUBJECTS_SET = new Set();
+
+let mailTone = 'tutoiement';
+let statsMode = 'subject';
+let statsPromo = 'P1';
+let maquettePromo = 'P1';
+
+const MONTHS_FR = {1:'janvier',2:'février',3:'mars',4:'avril',5:'mai',6:'juin',7:'juillet',8:'août',9:'septembre',10:'octobre',11:'novembre',12:'décembre'};
+const DAYS_FR = {1:'Lundi',2:'Mardi',3:'Mercredi',4:'Jeudi',5:'Vendredi',6:'Samedi',0:'Dimanche'};
+
+const IGNORE_SUBJECTS = new Set([
+    "erasmus day","forum international","période entreprise","periode entreprise",
+    "férié","ferie","mission à l'international","mission a l'international",
+    "matière","matières","divers"
+]);
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt2(n) { return String(n).padStart(2,'0'); }
+function normStr(s) {
+    return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function durH(ev) { return (ev.endDt - ev.startDt) / 3600000; }
+
+// ── CHARGEMENT DES DONNEES ──
+async function loadDashboardData() {
+    try {
+        const res = await fetch(`${BASE_URL}api/dashboard-data/${SLUG}`);
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        DATA.events_p1 = (data.events_p1 || []).map(ev => ({...ev, startDt: new Date(ev.start), endDt: new Date(ev.end), promo_label: 'P1'}));
+        DATA.events_p2 = (data.events_p2 || []).map(ev => ({...ev, startDt: new Date(ev.start), endDt: new Date(ev.end), promo_label: 'P2'}));
+        DATA.maquette_data = data.maquette_data || [];
+
+        ALL_EVENTS_FLAT = [...DATA.events_p1, ...DATA.events_p2];
+        TEACHERS_SET = new Set();
+        SUBJECTS_SET = new Set();
+        for (const e of ALL_EVENTS_FLAT) {
+            for (const t of (e.teachers||[])) TEACHERS_SET.add(t);
+            SUBJECTS_SET.add(e.summary);
+        }
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+// ── TABS ──
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ==========================================================
+// ONGLET MAILS
+// ==========================================================
+function initMailsTab() {
+    const sel = document.getElementById('mail-teacher-select');
+    const sortedTeachers = Array.from(TEACHERS_SET).sort();
+    if (sortedTeachers.length === 0) {
+        sel.innerHTML = '<option value="">Aucun enseignant</option>';
+        document.getElementById('mail-preview').value = '';
+        return;
+    }
+    sel.innerHTML = sortedTeachers.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    renderMailPreview();
+}
+
+function setMailTone(tone) {
+    mailTone = tone;
+    document.querySelectorAll('#panel-mails [data-tone]').forEach(b => b.classList.toggle('active', b.dataset.tone === tone));
+    renderMailPreview();
+}
+
+function renderMailPreview() {
+    const teacher = document.getElementById('mail-teacher-select').value;
+    const out = document.getElementById('mail-preview');
+    if (!teacher) { out.value = ''; return; }
+
+    const tEvs = ALL_EVENTS_FLAT.filter(e => (e.teachers||[]).includes(teacher));
+    const cleanName = teacher.replace(/,/g, '');
+    const parts = cleanName.split(/\s+/).filter(Boolean);
+
+    let intro, closing;
+    if (mailTone === 'tutoiement') {
+        const prenom = parts.length > 1 ? parts[1] : parts[0];
+        intro = `Bonjour ${prenom},\n\nVoici le récapitulatif de tes interventions :`;
+        closing = 'Bien à toi,';
+    } else {
+        const nom = parts[0];
+        intro = `Bonjour M./Mme ${nom},\n\nVeuillez trouver ci-dessous le récapitulatif de vos interventions :`;
+        closing = 'Cordialement,';
+    }
+
+    let body = '';
+    const promosPresent = Array.from(new Set(tEvs.map(e => e.promo_label))).sort();
+    let totalHGlobal = 0;
+
+    for (const promo of promosPresent) {
+        const pEvs = tEvs.filter(e => e.promo_label === promo);
+        if (pEvs.length === 0) continue;
+
+        body += `\nPour la promo ${promo} :\n`;
+        const bySubj = {};
+        for (const e of pEvs) {
+            (bySubj[e.summary] = bySubj[e.summary] || []).push(e);
+        }
+
+        for (const subj of Object.keys(bySubj)) {
+            let evList = bySubj[subj].slice().sort((a,b) => a.startDt - b.startDt);
+
+            // Fusion des séances consécutives (même matière, fin == début, mêmes groupes)
+            const merged = [];
+            if (evList.length) {
+                let curr = {...evList[0], groups: [...(evList[0].groups||[])]};
+                for (let i = 1; i < evList.length; i++) {
+                    const nxt = evList[i];
+                    const sameGroups = JSON.stringify([...(curr.groups||[])].sort()) === JSON.stringify([...(nxt.groups||[])].sort());
+                    if (curr.endDt.getTime() === nxt.startDt.getTime() && sameGroups) {
+                        curr.endDt = nxt.endDt;
+                    } else {
+                        merged.push(curr);
+                        curr = {...nxt, groups: [...(nxt.groups||[])]};
+                    }
+                }
+                merged.push(curr);
+            }
+
+            body += `\nMatière : ${subj}\n`;
+            for (const ev of merged) {
+                const dt = ev.startDt;
+                const dayStr = `${DAYS_FR[dt.getDay()]} ${dt.getDate()} ${MONTHS_FR[dt.getMonth()+1]}`;
+                const hStart = `${fmt2(dt.getHours())}h${fmt2(dt.getMinutes())}`;
+                const hEnd = `${fmt2(ev.endDt.getHours())}h${fmt2(ev.endDt.getMinutes())}`;
+                const dur = (ev.endDt - ev.startDt) / 3600000;
+                totalHGlobal += dur;
+
+                let grpTxt = '';
+                if (ev.groups && ev.groups.length === 1) grpTxt = ` (${ev.groups[0]})`;
+
+                body += `- ${dayStr} de ${hStart} à ${hEnd}${grpTxt}\n`;
+            }
+        }
+    }
+
+    const totalStr = (Number.isInteger(totalHGlobal) ? totalHGlobal : totalHGlobal.toFixed(2).replace(/\.?0+$/,'')) ;
+    const finalTxt = `${intro}\n${body}\nTotal planifié : ${totalStr} heures.\n\n${closing}`;
+    out.value = finalTxt;
+}
+
+function copyMailPreview() {
+    const out = document.getElementById('mail-preview');
+    out.select();
+    navigator.clipboard.writeText(out.value).then(() => {
+        const btn = document.querySelector('#mail-preview-card .copy-btn');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Copié !';
+        setTimeout(() => btn.innerHTML = orig, 1800);
+    });
+}
+
+// ==========================================================
+// ONGLET RECAPITULATIFS
+// ==========================================================
+function initStatsTab() {
+    const promos = [];
+    if (DATA.events_p1.length) promos.push('P1');
+    if (DATA.events_p2.length) promos.push('P2');
+    if (promos.length === 0) { promos.push('P1', 'P2'); }
+    statsPromo = promos[0] || 'P1';
+
+    const pillsWrap = document.getElementById('stats-promo-pills');
+    pillsWrap.innerHTML = promos.map(p =>
+        `<button class="pill-btn${p===statsPromo?' active':''}" onclick="setStatsPromo('${p}')">${p}</button>`
+    ).join('');
+
+    renderStatsSelect();
+}
+
+function setStatsPromo(promo) {
+    statsPromo = promo;
+    document.querySelectorAll('#stats-promo-pills .pill-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === promo));
+    renderStatsSelect();
+}
+
+function setStatsMode(mode) {
+    statsMode = mode;
+    document.querySelectorAll('#panel-stats [data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    document.getElementById('stats-select-label').textContent = mode === 'subject' ? 'Matière' : 'Enseignant';
+    renderStatsSelect();
+}
+
+function getPromoEvents(promo) {
+    return promo === 'P1' ? DATA.events_p1 : DATA.events_p2;
+}
+
+function renderStatsSelect() {
+    const evsPromo = getPromoEvents(statsPromo);
+    const sel = document.getElementById('stats-select');
+
+    let options;
+    if (statsMode === 'subject') {
+        options = Array.from(new Set(evsPromo.map(e => e.summary))).sort();
+    } else {
+        const t = new Set();
+        for (const e of evsPromo) for (const teacher of (e.teachers||[])) t.add(teacher);
+        options = Array.from(t).sort();
+    }
+
+    if (options.length === 0) {
+        sel.innerHTML = '<option value="">—</option>';
+    } else {
+        sel.innerHTML = options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    }
+    renderStatsTable();
+}
+
+function renderStatsTable() {
+    const evsPromo = getPromoEvents(statsPromo);
+    const sel = document.getElementById('stats-select').value;
+    const table = document.getElementById('stats-table');
+    if (!sel) { table.innerHTML = ''; return; }
+
+    let rows = [];
+    if (statsMode === 'subject') {
+        rows = evsPromo.filter(e => e.summary === sel).map(e => ({
+            Date: e.startDt.toLocaleDateString('fr-FR'),
+            Heures: `${fmt2(e.startDt.getHours())}:${fmt2(e.startDt.getMinutes())} - ${fmt2(e.endDt.getHours())}:${fmt2(e.endDt.getMinutes())}`,
+            Enseignant: (e.teachers||[]).join(', '),
+            Groupes: (e.groups||[]).join(', ')
+        }));
+        table.innerHTML = renderTableHTML(['Date','Heures','Enseignant','Groupes'], rows);
+    } else {
+        rows = evsPromo.filter(e => (e.teachers||[]).includes(sel)).map(e => ({
+            Date: e.startDt.toLocaleDateString('fr-FR'),
+            Heures: `${fmt2(e.startDt.getHours())}:${fmt2(e.startDt.getMinutes())} - ${fmt2(e.endDt.getHours())}:${fmt2(e.endDt.getMinutes())}`,
+            Matière: e.summary,
+            Groupes: (e.groups||[]).join(', ')
+        }));
+        table.innerHTML = renderTableHTML(['Date','Heures','Matière','Groupes'], rows);
+    }
+}
+
+function renderTableHTML(headers, rows, rowClassFn) {
+    if (rows.length === 0) {
+        return `<tbody><tr><td colspan="${headers.length}"><div class="empty-state"><i class="bi bi-inbox"></i>Aucune donnée</div></td></tr></tbody>`;
+    }
+    let html = '<thead><tr>' + headers.map(h => `<th>${esc(h)}</th>`).join('') + '</tr></thead><tbody>';
+    for (const row of rows) {
+        const cls = rowClassFn ? rowClassFn(row) : '';
+        html += `<tr class="${cls}">` + headers.map(h => `<td>${esc(row[h] ?? '')}</td>`).join('') + '</tr>';
+    }
+    html += '</tbody>';
+    return html;
+}
+
+// ==========================================================
+// ONGLET EXAMENS
+// ==========================================================
+function initExamsTab() {
+    const p1Exams = [], p2Exams = [];
+    for (const e of ALL_EVENTS_FLAT) {
+        if (e.description && e.description.toUpperCase().includes('EXAMEN')) {
+            const row = {
+                Date: e.startDt.toLocaleDateString('fr-FR'),
+                Horaire: `${fmt2(e.startDt.getHours())}:${fmt2(e.startDt.getMinutes())} - ${fmt2(e.endDt.getHours())}:${fmt2(e.endDt.getMinutes())}`,
+                Matière: e.summary,
+                Description: e.description
+            };
+            if (e.promo_label === 'P1') p1Exams.push(row);
+            else if (e.promo_label === 'P2') p2Exams.push(row);
+        }
+    }
+    p1Exams.sort((a,b) => a.Date.localeCompare(b.Date));
+    p2Exams.sort((a,b) => a.Date.localeCompare(b.Date));
+
+    document.getElementById('exams-table-p1').innerHTML = renderTableHTML(['Date','Horaire','Matière','Description'], p1Exams);
+    document.getElementById('exams-table-p2').innerHTML = renderTableHTML(['Date','Horaire','Matière','Description'], p2Exams);
+}
+
+// ==========================================================
+// ONGLET EXPORTS
+// ==========================================================
+function escIcalText(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+}
+
+function buildParisVTimezone() {
+    return [
+        'BEGIN:VTIMEZONE','TZID:Europe/Paris','X-LIC-LOCATION:Europe/Paris',
+        'BEGIN:DAYLIGHT','TZOFFSETFROM:+0100','TZOFFSETTO:+0200','TZNAME:CEST',
+        'DTSTART:19700329T020000','RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU','END:DAYLIGHT',
+        'BEGIN:STANDARD','TZOFFSETFROM:+0200','TZOFFSETTO:+0100','TZNAME:CET',
+        'DTSTART:19701025T030000','RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU','END:STANDARD',
+        'END:VTIMEZONE'
+    ].join('\r\n');
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fmtIcsDt(d) {
+    return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+
+function generateIcsString(events, includePrefix) {
+    const header = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//EDT Export//FR','CALSCALE:GREGORIAN'];
+    const body = [buildParisVTimezone()];
+
+    for (const ev of events) {
+        const uid = (crypto.randomUUID ? crypto.randomUUID() : 'uid-' + Math.random().toString(36).slice(2));
+        let summaryText = ev.summary;
+        if (includePrefix) {
+            const parts = [];
+            if (ev.promo_label) parts.push(ev.promo_label);
+            if (ev.groups && ev.groups.length) parts.push(...ev.groups);
+            if (parts.length) summaryText = `[${parts.join(' ')}] ${summaryText}`;
+        }
+
+        const descLines = [];
+        if (ev.description) descLines.push(ev.description);
+        if (ev.teachers && ev.teachers.length) descLines.push('Enseignant(s): ' + ev.teachers.join(' / '));
+        if (ev.groups && ev.groups.length) {
+            descLines.push(ev.groups.length === 1 ? ('Groupe: ' + ev.groups[0]) : ('Groupes: ' + ev.groups.join(' et ')));
+        }
+
+        body.push(
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTAMP:${fmtIcsDt(new Date())}Z`,
+            `DTSTART;TZID=Europe/Paris:${fmtIcsDt(ev.startDt)}`,
+            `DTEND;TZID=Europe/Paris:${fmtIcsDt(ev.endDt)}`,
+            `SUMMARY:${escIcalText(summaryText)}`,
+            `DESCRIPTION:${escIcalText(descLines.join('\n'))}`,
+            'END:VEVENT'
+        );
+    }
+    return header.concat(body, ['END:VCALENDAR']).join('\r\n');
+}
+
+function downloadIcs(content, filename) {
+    const blob = new Blob([content], {type: 'text/calendar'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function initExportsTab() {
+    const wrap = document.getElementById('exports-promo-list');
+    let html = '';
+    if (DATA.events_p1.length) html += `<button class="btn-secondary" style="margin:4px 6px 4px 0;" onclick="exportPromoIcs('P1')"><i class="bi bi-download"></i> P1.ics</button>`;
+    if (DATA.events_p2.length) html += `<button class="btn-secondary" style="margin:4px 6px 4px 0;" onclick="exportPromoIcs('P2')"><i class="bi bi-download"></i> P2.ics</button>`;
+    wrap.innerHTML = html || '<p style="color:var(--text-2); font-size:13px;">Aucune donnée disponible.</p>';
+
+    const sel = document.getElementById('export-teacher-select');
+    const sortedTeachers = Array.from(TEACHERS_SET).sort();
+    sel.innerHTML = sortedTeachers.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+}
+
+function exportPromoIcs(promo) {
+    const evs = getPromoEvents(promo);
+    const ics = generateIcsString(evs, false);
+    downloadIcs(ics, `${promo}.ics`);
+}
+
+function generateTeacherIcs() {
+    const sel = document.getElementById('export-teacher-select');
+    const chosen = Array.from(sel.selectedOptions).map(o => o.value);
+    const resultDiv = document.getElementById('export-teacher-result');
+    if (chosen.length === 0) {
+        resultDiv.innerHTML = '<p style="color:var(--text-2); font-size:13px;">Sélectionnez au moins un enseignant.</p>';
+        return;
+    }
+    const evs = ALL_EVENTS_FLAT.filter(e => (e.teachers||[]).some(t => chosen.includes(t)));
+    const ics = generateIcsString(evs, true);
+    const safeName = chosen[0].replace(/\s+/g,'_').replace(/,/g,'');
+    const fname = `Planning_${safeName}.ics`;
+    downloadIcs(ics, fname);
+    resultDiv.innerHTML = `<p style="color:var(--text-2); font-size:13px;"><i class="bi bi-check-circle"></i> Fichier <strong>${esc(fname)}</strong> téléchargé.</p>`;
+}
+
+// ==========================================================
+// ONGLET MAQUETTE
+// ==========================================================
+function initMaquetteTab() {
+    const promos = [];
+    if (DATA.events_p1.length) promos.push('P1');
+    if (DATA.events_p2.length) promos.push('P2');
+    if (promos.length === 0) promos.push('P1','P2');
+    maquettePromo = promos[0] || 'P1';
+
+    const pillsWrap = document.getElementById('maquette-promo-pills');
+    pillsWrap.innerHTML = promos.map(p =>
+        `<button class="pill-btn${p===maquettePromo?' active':''}" onclick="setMaquettePromo('${p}')">${p}</button>`
+    ).join('');
+
+    renderMaquetteGroupSelect();
+}
+
+function setMaquettePromo(promo) {
+    maquettePromo = promo;
+    document.querySelectorAll('#maquette-promo-pills .pill-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === promo));
+    renderMaquetteGroupSelect();
+}
+
+function getGroupsInPromo(promo) {
+    const evs = getPromoEvents(promo);
+    const groups = new Set();
+    for (const e of evs) for (const g of (e.groups||[])) if (g) groups.add(g);
+    const sorted = Array.from(groups).sort();
+    return sorted.length ? sorted : ['Promo entière'];
+}
+
+function renderMaquetteGroupSelect() {
+    const groups = getGroupsInPromo(maquettePromo);
+    const sel = document.getElementById('maquette-group-select');
+    sel.innerHTML = groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+    renderMaquetteTable();
+}
+
+function groupMatches(evGroups, groupe) {
+    const gNorm = groupe.trim().toUpperCase().replace(/\s+/g,'');
+    return (evGroups||[]).some(g => g.trim().toUpperCase().replace(/\s+/g,'') === gNorm);
+}
+
+function sumHoursBySubjectAndGroup(events, groupSel) {
+    const totals = {}, counts = {};
+    for (const ev of events) {
+        const subj = ev.summary;
+        if (subj && IGNORE_SUBJECTS.has(subj.trim().toLowerCase())) continue;
+
+        let matches;
+        if (!ev.groups || ev.groups.length === 0) {
+            matches = true; // promo entière
+        } else {
+            matches = groupMatches(ev.groups, groupSel) || (groupSel === 'Promo entière');
+        }
+        if (!matches) continue;
+
+        const delta = durH(ev);
+        totals[subj] = (totals[subj] || 0) + delta;
+        counts[subj] = (counts[subj] || 0) + 1;
+    }
+    return {totals, counts};
+}
+
+function renderMaquetteTable() {
+    const groupSel = document.getElementById('maquette-group-select').value;
+    if (!groupSel) return;
+
+    const evsTarget = getPromoEvents(maquettePromo);
+    const {totals: totalsBySubject, counts: countsBySubject} = sumHoursBySubjectAndGroup(evsTarget, groupSel);
+
+    const rowsOut = [];
+    for (const row of DATA.maquette_data) {
+        const subj = row.subject;
+        if (!subj || IGNORE_SUBJECTS.has(subj.trim().toLowerCase())) continue;
+
+        const target = row.total; // colonne "Total" de la maquette = cible d'heures
+        const hours = totalsBySubject[subj] || 0;
+        const sessions = countsBySubject[subj] || 0;
+
+        let diff = null;
+        if (target !== null && target !== undefined) diff = hours - target;
+
+        rowsOut.push({
+            subject: subj,
+            target_hours: target,
+            entered_hours: Math.round(hours * 100) / 100,
+            diff_hours: diff !== null ? Math.round(diff * 100) / 100 : null,
+            sessions_entered: sessions
+        });
+    }
+
+    document.getElementById('maquette-table-title').textContent = `Résultats pour ${maquettePromo} — ${groupSel}`;
+
+    const headers = ['Matière','Heures cibles','Heures saisies','Écart','Séances'];
+    const rowsDisplay = rowsOut.map(r => ({
+        'Matière': r.subject,
+        'Heures cibles': r.target_hours !== null && r.target_hours !== undefined ? r.target_hours : '—',
+        'Heures saisies': r.entered_hours,
+        'Écart': r.diff_hours !== null ? (r.diff_hours > 0 ? '+'+r.diff_hours : r.diff_hours) : '—',
+        'Séances': r.sessions_entered,
+        _raw: r
+    }));
+
+    const table = document.getElementById('maquette-table');
+    if (rowsDisplay.length === 0) {
+        table.innerHTML = `<tbody><tr><td><div class="empty-state"><i class="bi bi-inbox"></i>Aucune donnée de maquette disponible. Re-uploadez le fichier Excel pour générer la maquette.</div></td></tr></tbody>`;
+    } else {
+        table.innerHTML = renderTableHTML(headers, rowsDisplay, (row) => {
+            const r = row._raw;
+            if (r.target_hours === null || r.target_hours === undefined || r.target_hours === 0) {
+                return r.entered_hours > 0 ? '' : 'row-warn';
+            }
+            if (r.diff_hours !== null && Math.abs(r.diff_hours) > 0.001) return 'row-error';
+            return '';
+        });
+    }
+
+    // Métriques résumé
+    const totalExpected = rowsOut.reduce((s,r) => s + (r.target_hours || 0), 0);
+    const totalEntered = rowsOut.reduce((s,r) => s + (r.entered_hours || 0), 0);
+    const delta = totalEntered - totalExpected;
+
+    document.getElementById('maquette-metrics').innerHTML = `
+        <div class="metric-card"><div class="metric-value">${totalExpected.toFixed(2)} h</div><div class="metric-label">Heures Maquette</div></div>
+        <div class="metric-card"><div class="metric-value">${totalEntered.toFixed(2)} h</div><div class="metric-label">Heures Saisies</div></div>
+        <div class="metric-card"><div class="metric-value" style="color:${delta===0?'var(--text)':(delta>0?'#dc2626':'#2563eb')}">${delta>=0?'+':''}${delta.toFixed(2)} h</div><div class="metric-label">Écart Global</div></div>
+    `;
+}
+
+// ==========================================================
+// INIT GLOBAL
+// ==========================================================
+async function initDashboard() {
+    await loadDashboardData();
+    document.getElementById('global-loading').classList.remove('active');
+    document.getElementById('global-loading').style.display = 'none';
+    document.getElementById('panel-mails').classList.add('active');
+
+    initMailsTab();
+    initStatsTab();
+    initExamsTab();
+    initExportsTab();
+    initMaquetteTab();
+}
+
+initDashboard();
+
+</script>
+</body>
+</html>
