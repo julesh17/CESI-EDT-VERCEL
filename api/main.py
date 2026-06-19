@@ -49,7 +49,7 @@ app.add_middleware(
 PARIS_TZ = pytz.timezone("Europe/Paris")
 
 # ==========================================
-# 2. PARSING
+# 2. PARSING EDT
 # ==========================================
 
 def normalize_group_label(x):
@@ -168,7 +168,6 @@ def find_slot_rows(df):
 
 def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dict]:
     file_io = io.BytesIO(file_content)
-
     try:
         df = pd.read_excel(file_io, sheet_name=sheet_name, header=None)
     except ValueError:
@@ -214,7 +213,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if not summary_str:
                     continue
 
-                # Enseignants
                 teachers = []
                 if (r + 2) < nrows:
                     for off in range(2, 6):
@@ -231,7 +229,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                             teachers.append(s)
                 teachers = list(dict.fromkeys(teachers))
 
-                # Index de fin
                 stop_idx = None
                 for off in range(1, 12):
                     idx = r + off
@@ -243,7 +240,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if stop_idx is None:
                     stop_idx = min(r + 7, nrows)
 
-                # Description
                 desc_parts = []
                 for idx in range(r + 1, stop_idx):
                     if idx >= nrows:
@@ -261,7 +257,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                     desc_parts.append(s)
                 desc_text = " | ".join(dict.fromkeys(desc_parts))
 
-                # Heures
                 start_val, end_val = None, None
                 for off in range(1, 13):
                     idx = r + off
@@ -282,14 +277,12 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                 if start_t is None or end_t is None:
                     continue
 
-                # Construction DateTime
                 d = to_date(df.iat[date_row, c])
                 if d is None:
                     continue
                 dtstart = datetime.combine(d, start_t)
                 dtend = datetime.combine(d, end_t)
 
-                # Groupes
                 gl = normalize_group_label(df.iat[group_row, col] if group_row < nrows else None)
                 gl_next = normalize_group_label(df.iat[group_row, col + 1] if (col + 1) < ncols else None)
                 is_left_col = (col == c)
@@ -318,7 +311,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
                     'groups': groups
                 })
 
-    # Fusion des événements identiques
     merged = {}
     for e in raw_events:
         key = (e['summary'], e['start'], e['end'])
@@ -335,7 +327,6 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         merged[key]['descriptions'].update(e.get('descriptions', set()))
         merged[key]['groups'].update(e.get('groups', set()))
 
-    # Conversion JSON serializable
     final_list = []
     for v in merged.values():
         final_list.append({
@@ -348,6 +339,124 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
         })
 
     return final_list
+
+
+# ==========================================
+# 2b. PARSING MAQUETTE
+# ==========================================
+
+def parse_maquette_sheet(file_content: bytes) -> List[dict]:
+    """
+    Parse la feuille 'Maquette' du fichier Excel.
+    Structure attendue (0-indexé) :
+      col 2  = Matière
+      col 3-7 = Enseignants 1-5
+      col 8  = CM/TD
+      col 9  = TP
+      col 10 = Autonomie
+      col 11 = Examen
+      col 12 = Total
+      col 13 = Commentaires
+      col 14 = Coefficient
+    Ligne 0 = groupe de colonnes (headers niveau 1)
+    Ligne 1 = headers
+    Ligne 2+ = données
+    """
+    file_io = io.BytesIO(file_content)
+    try:
+        xls = pd.ExcelFile(file_io)
+        maquette_sheet = next((s for s in xls.sheet_names if 'maquette' in s.lower()), None)
+        if not maquette_sheet:
+            log_msg("Feuille Maquette introuvable.")
+            return []
+    except Exception as e:
+        log_msg(f"Erreur lecture feuilles maquette: {e}")
+        return []
+
+    file_io.seek(0)
+    try:
+        df = pd.read_excel(file_io, sheet_name=maquette_sheet, header=None)
+    except Exception as e:
+        log_msg(f"Erreur lecture maquette: {e}")
+        return []
+
+    if df.shape[1] < 13:
+        log_msg("Maquette: pas assez de colonnes.")
+        return []
+
+    IGNORE_SUBJECTS = {
+        "erasmus day", "forum international", "période entreprise", "periode entreprise",
+        "férié", "ferie", "mission à l'international", "mission a l'international",
+        "matière", "matières", "divers"
+    }
+
+    rows_out = []
+    # Contexte de section (semestre / UE) — propagation vers le bas
+    current_semester = None
+    current_ue = None
+
+    for i in range(2, len(df)):  # skip les 2 lignes de headers
+        row = df.iloc[i]
+
+        # Mise à jour du semestre (col 0) si non vide
+        if pd.notna(row.iloc[0]) and str(row.iloc[0]).strip():
+            current_semester = str(row.iloc[0]).strip()
+
+        # Mise à jour de l'UE (col 1) si non vide
+        if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip():
+            current_ue = str(row.iloc[1]).strip()
+
+        # Matière (col 2)
+        subj_raw = row.iloc[2] if df.shape[1] > 2 else None
+        if subj_raw is None or pd.isna(subj_raw):
+            continue
+        subj = str(subj_raw).strip()
+        if not subj:
+            continue
+        if subj.lower() in IGNORE_SUBJECTS:
+            continue
+
+        # Enseignants (cols 3-7)
+        teachers = []
+        for tc in range(3, 8):
+            if tc >= df.shape[1]:
+                break
+            t = row.iloc[tc]
+            if pd.notna(t) and str(t).strip() and str(t).strip() not in [' ', '']:
+                teachers.append(str(t).strip())
+
+        def safe_float(v):
+            try:
+                f = float(v)
+                return f if not pd.isna(f) else None
+            except Exception:
+                return None
+
+        cm_td    = safe_float(row.iloc[8])  if df.shape[1] > 8  else None
+        tp       = safe_float(row.iloc[9])  if df.shape[1] > 9  else None
+        autonomie= safe_float(row.iloc[10]) if df.shape[1] > 10 else None
+        examen   = safe_float(row.iloc[11]) if df.shape[1] > 11 else None
+        total    = safe_float(row.iloc[12]) if df.shape[1] > 12 else None
+        comment  = str(row.iloc[13]).strip() if df.shape[1] > 13 and pd.notna(row.iloc[13]) else ""
+        coeff    = safe_float(row.iloc[14]) if df.shape[1] > 14 else None
+
+        rows_out.append({
+            "subject":    subj,
+            "semester":   current_semester,
+            "ue":         current_ue,
+            "teachers":   teachers,
+            "cm_td":      cm_td,
+            "tp":         tp,
+            "autonomie":  autonomie,
+            "examen":     examen,
+            "total":      total,
+            "comment":    comment,
+            "coeff":      coeff,
+        })
+
+    log_msg(f"Maquette: {len(rows_out)} matières extraites.")
+    return rows_out
+
 
 # ==========================================
 # 3. GENERATEUR ICS
@@ -451,6 +560,7 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
     footer = ['END:VCALENDAR']
     return '\n'.join(header + body + footer)
 
+
 # ==========================================
 # 4. ROUTES & AUTH
 # ==========================================
@@ -464,7 +574,6 @@ def hash_password(password: str):
 
 
 def convert_updated_at(plannings: list) -> list:
-    """Convertit updated_at UTC → heure Europe/Paris pour l'affichage."""
     for p in plannings:
         if p.get("updated_at"):
             try:
@@ -482,20 +591,18 @@ async def home(request: Request, filter: str = "my"):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Récupération de la colonne creator en plus
     query = supabase.table("plannings").select("slug, name, year, updated_at, creator")
-    
-    # Application du filtre si demandé
+
     if filter == "my":
         query = query.eq("creator", user)
-        
+
     response = query.execute()
     plannings = convert_updated_at(response.data)
 
     return templates.TemplateResponse(request, "index.html", {
         "user": user,
         "plannings": plannings,
-        "current_filter": filter # On passe le filtre à la vue
+        "current_filter": filter
     })
 
 
@@ -574,7 +681,6 @@ async def create_calendar(request: Request, promo_name: str = Form(...), school_
         return RedirectResponse("/login")
 
     slug = f"{promo_name}-{school_year}".lower().replace(" ", "-")
-    # Ajout du creator lors de la création
     data = {"slug": slug, "name": promo_name, "year": school_year, "creator": user}
     try:
         supabase.table("plannings").insert(data).execute()
@@ -601,13 +707,15 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
 
     events_p1 = parse_sheet_to_events_json(content, "EDT P1")
     events_p2 = parse_sheet_to_events_json(content, "EDT P2")
+    maquette_data = parse_maquette_sheet(content)
 
-    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}")
+    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)}")
 
     try:
         supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
+            "maquette_data": maquette_data,
             "updated_at": datetime.now(PARIS_TZ).isoformat()
         }).eq("slug", slug).execute()
     except Exception as e:
@@ -645,7 +753,7 @@ async def get_ics_file(slug: str, group: str):
         raise HTTPException(500, detail="Erreur interne")
 
 
-# --- VUE PUBLIQUE CALENDRIER (sans login) ---
+# --- VUE PUBLIQUE CALENDRIER ---
 
 @app.get("/calendrier/{slug}", response_class=HTMLResponse)
 async def view_calendar(slug: str, request: Request):
@@ -659,6 +767,27 @@ async def view_calendar(slug: str, request: Request):
         "planning_year": p.get("year", ""),
     })
 
+
+# --- VUE TABLEAU DE BORD (protégée) ---
+
+@app.get("/dashboard/{slug}", response_class=HTMLResponse)
+async def view_dashboard(slug: str, request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    res = supabase.table("plannings").select("slug, name, year").ilike("slug", slug).execute()
+    if not res.data:
+        raise HTTPException(404, detail="Planning introuvable")
+    p = res.data[0]
+    return templates.TemplateResponse(request, "dashboard.html", {
+        "slug": p["slug"],
+        "planning_name": p["name"],
+        "planning_year": p.get("year", ""),
+        "user": user,
+    })
+
+
+# --- APIS JSON ---
 
 @app.get("/api/events/{slug}/{group}")
 async def api_events(slug: str, group: str):
@@ -674,4 +803,41 @@ async def api_events(slug: str, group: str):
         raise
     except Exception as e:
         log_msg(f"Erreur API events: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.get("/api/maquette/{slug}")
+async def api_maquette(slug: str):
+    """Retourne les données de la maquette pédagogique."""
+    try:
+        res = supabase.table("plannings").select("maquette_data").ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404)
+        return res.data[0].get("maquette_data", []) or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur API maquette: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.get("/api/dashboard-data/{slug}")
+async def api_dashboard_data(slug: str):
+    """Retourne en une seule requête : events_p1, events_p2, maquette_data."""
+    try:
+        res = supabase.table("plannings").select(
+            "events_p1, events_p2, maquette_data"
+        ).ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404)
+        d = res.data[0]
+        return {
+            "events_p1":     d.get("events_p1", []) or [],
+            "events_p2":     d.get("events_p2", []) or [],
+            "maquette_data": d.get("maquette_data", []) or [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur API dashboard-data: {e}")
         raise HTTPException(500, detail="Erreur interne")
