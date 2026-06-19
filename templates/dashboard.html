@@ -734,15 +734,15 @@ function exportPromoIcs(promo) {
 
 function generateTeacherIcs() {
     const sel = document.getElementById('export-teacher-select');
-    const chosen = Array.from(sel.selectedOptions).map(o => o.value);
+    const chosen = sel.value;
     const resultDiv = document.getElementById('export-teacher-result');
-    if (chosen.length === 0) {
-        resultDiv.innerHTML = '<p style="color:var(--text-2); font-size:13px;">Sélectionnez au moins un enseignant.</p>';
+    if (!chosen) {
+        resultDiv.innerHTML = '<p style="color:var(--text-2); font-size:13px;">Sélectionnez un enseignant.</p>';
         return;
     }
-    const evs = ALL_EVENTS_FLAT.filter(e => (e.teachers||[]).some(t => chosen.includes(t)));
+    const evs = ALL_EVENTS_FLAT.filter(e => (e.teachers||[]).includes(chosen));
     const ics = generateIcsString(evs, true);
-    const safeName = chosen[0].replace(/\s+/g,'_').replace(/,/g,'');
+    const safeName = chosen.replace(/\s+/g,'_').replace(/,/g,'');
     const fname = `Planning_${safeName}.ics`;
     downloadIcs(ics, fname);
     resultDiv.innerHTML = `<p style="color:var(--text-2); font-size:13px;"><i class="bi bi-check-circle"></i> Fichier <strong>${esc(fname)}</strong> téléchargé.</p>`;
@@ -880,6 +880,176 @@ function renderMaquetteTable() {
 }
 
 // ==========================================================
+// ONGLET BUDGET
+// ==========================================================
+
+// Coefficient d'une matière (maquette). 1 par défaut si non trouvé.
+function getSubjectCoeff(subject) {
+    const c = SUBJECT_COEFF[subject];
+    return (c === null || c === undefined) ? 1 : c;
+}
+
+// Tarif horaire d'un enseignant. 0 si inconnu (pas dans la feuille Enseignants).
+function getTeacherRate(name) {
+    const r = TEACHER_RATES[name];
+    return (r === null || r === undefined) ? 0 : r;
+}
+
+// Montant d'une séance = durée(h) x coefficient(matière) x somme des tarifs horaires des enseignants
+function seanceAmount(ev) {
+    const hours = durH(ev);
+    const coeff = getSubjectCoeff(ev.summary);
+    const teachers = ev.teachers || [];
+    const rateSum = teachers.reduce((s,t) => s + getTeacherRate(t), 0);
+    return hours * coeff * rateSum;
+}
+
+function setBudgetPromo(promo) {
+    budgetPromo = promo;
+    document.querySelectorAll('#budget-promo-pills .pill-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === promo));
+    renderBudgetSeancesTable();
+}
+
+function initBudgetTab() {
+    const promos = [];
+    if (DATA.events_p1.length) promos.push('P1');
+    if (DATA.events_p2.length) promos.push('P2');
+    if (promos.length === 0) promos.push('P1','P2');
+    budgetPromo = promos[0] || 'P1';
+
+    const pillsWrap = document.getElementById('budget-promo-pills');
+    pillsWrap.innerHTML = promos.map(p =>
+        `<button class="pill-btn${p===budgetPromo?' active':''}" onclick="setBudgetPromo('${p}')">${p}</button>`
+    ).join('');
+
+    renderBudgetGlobalMetrics();
+    renderBudgetSeancesTable();
+    renderBudgetMonthTable();
+    renderBudgetYearMetrics();
+}
+
+function renderBudgetGlobalMetrics() {
+    const totalP1 = DATA.events_p1.reduce((s,ev) => s + seanceAmount(ev), 0);
+    const totalP2 = DATA.events_p2.reduce((s,ev) => s + seanceAmount(ev), 0);
+    const total = totalP1 + totalP2;
+    const hoursTotal = ALL_EVENTS_FLAT.reduce((s,ev) => s + durH(ev), 0);
+
+    document.getElementById('budget-metrics-global').innerHTML = `
+        <div class="metric-card"><div class="metric-value">${fmtEUR(total)}</div><div class="metric-label">Budget total (P1+P2)</div></div>
+        <div class="metric-card"><div class="metric-value">${fmtEUR(totalP1)}</div><div class="metric-label">Budget P1</div></div>
+        <div class="metric-card"><div class="metric-value">${fmtEUR(totalP2)}</div><div class="metric-label">Budget P2</div></div>
+        <div class="metric-card"><div class="metric-value">${hoursTotal.toFixed(1)} h</div><div class="metric-label">Heures planifiées</div></div>
+    `;
+}
+
+// ── Budget par séance (détail, comme la feuille Facturation Excel) ──
+function renderBudgetSeancesTable() {
+    const evs = getPromoEvents(budgetPromo).slice().sort((a,b) => a.startDt - b.startDt);
+
+    const headers = ['Date','Heures','Matière','Enseignant(s)','Groupes','Coeff.','Tarif(s)','Durée (h)','Montant'];
+    const rowsDisplay = evs.map(ev => {
+        const coeff = getSubjectCoeff(ev.summary);
+        const teachers = ev.teachers || [];
+        const rates = teachers.map(t => getTeacherRate(t));
+        const amount = seanceAmount(ev);
+        return {
+            'Date': ev.startDt.toLocaleDateString('fr-FR'),
+            'Heures': `${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())} - ${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())}`,
+            'Matière': ev.summary,
+            'Enseignant(s)': teachers.join(' / ') || '—',
+            'Groupes': (ev.groups||[]).join(', ') || 'Promo entière',
+            'Coeff.': coeff,
+            'Tarif(s)': rates.length ? rates.map(r => fmtEUR(r)).join(' + ') : '—',
+            'Durée (h)': Math.round(durH(ev)*100)/100,
+            'Montant': fmtEUR(amount),
+            _amount: amount,
+        };
+    });
+
+    const table = document.getElementById('budget-seances-table');
+    if (rowsDisplay.length === 0) {
+        table.innerHTML = `<tbody><tr><td><div class="empty-state"><i class="bi bi-inbox"></i>Aucune séance disponible.</div></td></tr></tbody>`;
+        return;
+    }
+    table.innerHTML = renderTableHTML(headers, rowsDisplay, (row) => row._amount === 0 ? 'row-warn' : '');
+}
+
+function copyBudgetSeances() {
+    copyTableToClipboard('budget-seances-table');
+}
+
+// ── Budget par mois (P1+P2 combinées) ──
+function renderBudgetMonthTable() {
+    const monthTotals = {}; // "YYYY-MM" -> { amount, hours, label }
+    for (const ev of ALL_EVENTS_FLAT) {
+        const d = ev.startDt;
+        const key = `${d.getFullYear()}-${fmt2(d.getMonth()+1)}`;
+        if (!monthTotals[key]) {
+            monthTotals[key] = {
+                amount: 0, hours: 0,
+                label: `${MONTHS_FR[d.getMonth()+1].charAt(0).toUpperCase()}${MONTHS_FR[d.getMonth()+1].slice(1)} ${d.getFullYear()}`,
+                sortKey: key
+            };
+        }
+        monthTotals[key].amount += seanceAmount(ev);
+        monthTotals[key].hours += durH(ev);
+    }
+
+    const sortedKeys = Object.keys(monthTotals).sort();
+    const headers = ['Mois','Heures','Budget'];
+    const rowsDisplay = sortedKeys.map(k => ({
+        'Mois': monthTotals[k].label,
+        'Heures': Math.round(monthTotals[k].hours*100)/100,
+        'Budget': fmtEUR(monthTotals[k].amount),
+    }));
+
+    const table = document.getElementById('budget-month-table');
+    if (rowsDisplay.length === 0) {
+        table.innerHTML = `<tbody><tr><td><div class="empty-state"><i class="bi bi-inbox"></i>Aucune donnée disponible.</div></td></tr></tbody>`;
+        return;
+    }
+    table.innerHTML = renderTableHTML(headers, rowsDisplay);
+}
+
+function copyBudgetMonth() {
+    copyTableToClipboard('budget-month-table');
+}
+
+// ── Budget année scolaire (P1+P2 combinées) ──
+function renderBudgetYearMetrics() {
+    const totalAmount = ALL_EVENTS_FLAT.reduce((s,ev) => s + seanceAmount(ev), 0);
+    const totalHours = ALL_EVENTS_FLAT.reduce((s,ev) => s + durH(ev), 0);
+    const avgRate = totalHours > 0 ? totalAmount / totalHours : 0;
+
+    document.getElementById('budget-year-metrics').innerHTML = `
+        <div class="metric-card"><div class="metric-value">${fmtEUR(totalAmount)}</div><div class="metric-label">Budget total année</div></div>
+        <div class="metric-card"><div class="metric-value">${totalHours.toFixed(1)} h</div><div class="metric-label">Heures totales</div></div>
+        <div class="metric-card"><div class="metric-value">${fmtEUR(avgRate)}</div><div class="metric-label">Coût moyen / heure</div></div>
+    `;
+}
+
+// ── Copie tableau HTML -> presse-papier (format tabulé, compatible Excel) ──
+function copyTableToClipboard(tableId) {
+    const table = document.getElementById(tableId);
+    const rows = table.querySelectorAll('tr');
+    const lines = [];
+    for (const row of rows) {
+        const cells = row.querySelectorAll('th,td');
+        if (cells.length === 0) continue;
+        lines.push(Array.from(cells).map(c => c.textContent.trim()).join('\t'));
+    }
+    const tsv = lines.join('\n');
+    navigator.clipboard.writeText(tsv).then(() => {
+        const btn = event.target.closest('.copy-btn');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Copié !';
+            setTimeout(() => btn.innerHTML = orig, 1800);
+        }
+    });
+}
+
+// ==========================================================
 // INIT GLOBAL
 // ==========================================================
 async function initDashboard() {
@@ -893,6 +1063,7 @@ async function initDashboard() {
     initExamsTab();
     initExportsTab();
     initMaquetteTab();
+    initBudgetTab();
 }
 
 initDashboard();
