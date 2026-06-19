@@ -459,6 +459,79 @@ def parse_maquette_sheet(file_content: bytes) -> List[dict]:
 
 
 # ==========================================
+# 2c. PARSING ENSEIGNANTS (tarifs)
+# ==========================================
+
+def parse_teachers_sheet(file_content: bytes) -> List[dict]:
+    """
+    Parse la feuille 'Enseignants' du fichier Excel.
+    Structure (0-indexé) :
+      col 1 = Nom (format "NOM, Prénom" — identique au format utilisé dans EDT P1/P2)
+      col 2 = Organisme
+      col 3 = Majoration (1 = oui / vide = non, utilisé par la formule Excel)
+      col 4 = Pourcentage de majoration
+      col 5 = Tarif horaire théorique
+      col 6 = Tarif horaire effectif (= théorique si majoration, sinon théorique x1.25)
+      col 7 = Région
+
+    On stocke le tarif EFFECTIF (col 6), qui est celui réellement utilisé dans les
+    formules de facturation du classeur Excel (VLOOKUP ... colonne 6).
+    """
+    file_io = io.BytesIO(file_content)
+    try:
+        xls = pd.ExcelFile(file_io)
+        teachers_sheet = next((s for s in xls.sheet_names if 'enseignant' in s.lower()), None)
+        if not teachers_sheet:
+            log_msg("Feuille Enseignants introuvable.")
+            return []
+    except Exception as e:
+        log_msg(f"Erreur lecture feuilles enseignants: {e}")
+        return []
+
+    file_io.seek(0)
+    try:
+        df = pd.read_excel(file_io, sheet_name=teachers_sheet, header=None)
+    except Exception as e:
+        log_msg(f"Erreur lecture enseignants: {e}")
+        return []
+
+    if df.shape[1] < 7:
+        log_msg("Enseignants: pas assez de colonnes.")
+        return []
+
+    def safe_float(v):
+        try:
+            f = float(v)
+            return f if not pd.isna(f) else None
+        except Exception:
+            return None
+
+    rows_out = []
+    seen_names = set()
+    for i in range(len(df)):
+        name_raw = df.iat[i, 1]
+        if name_raw is None or pd.isna(name_raw):
+            continue
+        name = str(name_raw).strip()
+        if not name:
+            continue
+        # En cas de doublon (le fichier peut lister 2x le même enseignant), garder la 1ère occurrence
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+
+        rate = safe_float(df.iat[i, 6])  # tarif effectif (colonne G / index 6)
+        rows_out.append({
+            "name": name,
+            "organism": str(df.iat[i, 2]).strip() if pd.notna(df.iat[i, 2]) else "",
+            "hourly_rate": rate if rate is not None else 0.0,
+        })
+
+    log_msg(f"Enseignants: {len(rows_out)} tarifs extraits.")
+    return rows_out
+
+
+# ==========================================
 # 3. GENERATEUR ICS
 # ==========================================
 
@@ -708,14 +781,16 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     events_p1 = parse_sheet_to_events_json(content, "EDT P1")
     events_p2 = parse_sheet_to_events_json(content, "EDT P2")
     maquette_data = parse_maquette_sheet(content)
+    teachers_data = parse_teachers_sheet(content)
 
-    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)}")
+    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)}, Enseignants: {len(teachers_data)}")
 
     try:
         supabase.table("plannings").update({
             "events_p1": events_p1,
             "events_p2": events_p2,
             "maquette_data": maquette_data,
+            "teachers_data": teachers_data,
             "updated_at": datetime.now(PARIS_TZ).isoformat()
         }).eq("slug", slug).execute()
     except Exception as e:
@@ -823,10 +898,10 @@ async def api_maquette(slug: str):
 
 @app.get("/api/dashboard-data/{slug}")
 async def api_dashboard_data(slug: str):
-    """Retourne en une seule requête : events_p1, events_p2, maquette_data."""
+    """Retourne en une seule requête : events_p1, events_p2, maquette_data, teachers_data."""
     try:
         res = supabase.table("plannings").select(
-            "events_p1, events_p2, maquette_data"
+            "events_p1, events_p2, maquette_data, teachers_data"
         ).ilike("slug", slug).execute()
         if not res.data:
             raise HTTPException(404)
@@ -835,6 +910,7 @@ async def api_dashboard_data(slug: str):
             "events_p1":     d.get("events_p1", []) or [],
             "events_p2":     d.get("events_p2", []) or [],
             "maquette_data": d.get("maquette_data", []) or [],
+            "teachers_data": d.get("teachers_data", []) or [],
         }
     except HTTPException:
         raise
