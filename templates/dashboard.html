@@ -21,6 +21,7 @@
             --warn-bg: #fff3cd;
             --error-bg: #f8d7da;
             --ok-bg: #d1fae5;
+            --today: #dc2626;
             --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04);
             --shadow-lg: 0 8px 32px rgba(0,0,0,0.10);
             --radius: 14px;
@@ -158,10 +159,98 @@
         }
         .copy-btn:hover { background: var(--accent); }
 
+        /* ── MINI CALENDRIER BUDGET ── */
+        .bcal-toolbar {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .btn-today {
+            padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+            background: var(--surface); font-size: 13px; font-weight: 600; color: var(--text);
+            cursor: pointer; font-family: 'DM Sans', sans-serif;
+        }
+        .btn-today:hover { background: var(--surface-2); }
+        .btn-nav {
+            width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+            background: var(--surface); display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--text-2); font-size: 15px;
+        }
+        .btn-nav:hover { background: var(--surface-2); }
+        .current-period { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; min-width: 160px; text-align: center; display: inline-block; }
+        .view-switcher { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; border: 1px solid var(--border); }
+        .view-btn {
+            padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer;
+            border: none; background: transparent; color: var(--text-2); font-family: 'DM Sans', sans-serif;
+        }
+        .view-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+        #bcal-container { background: var(--surface-2); border-radius: var(--radius-sm); padding: 4px; }
+
+        .bcal-month-grid { background: var(--surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+        .bcal-month-header { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+        .bcal-day-name { padding: 8px 6px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-2); }
+        .bcal-month-body { display: grid; grid-template-columns: repeat(7, 1fr); }
+        .bcal-month-cell { min-height: 92px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 5px; }
+        .bcal-month-cell:nth-child(7n) { border-right: none; }
+        .bcal-month-cell.other-month { background: var(--surface-2); }
+        .bcal-month-cell.today-cell { background: #fef2f2; }
+        .bcal-day-number { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 11px; font-weight: 600; margin-bottom: 3px; color: var(--text-2); }
+        .bcal-month-cell.today-cell .bcal-day-number { background: var(--today, #dc2626); color: white; }
+        .bcal-month-cell.current-month .bcal-day-number { color: var(--text); }
+        .bcal-month-day-total { font-size: 10px; font-weight: 700; color: var(--text-2); margin-bottom: 3px; }
+        .bcal-event-pill {
+            font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 5px; margin-bottom: 2px;
+            cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .bcal-event-pill:hover { opacity: 0.85; }
+        .bcal-more { font-size: 10px; color: var(--text-2); padding: 1px 4px; cursor: pointer; }
+
+        .bcal-week-grid { background: var(--surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+        .bcal-week-header { display: grid; grid-template-columns: 56px repeat(5, 1fr); border-bottom: 2px solid var(--border); }
+        .bcal-week-header-cell { padding: 10px 6px; text-align: center; border-left: 1px solid var(--border); }
+        .bcal-week-header-cell:first-child { border-left: none; }
+        .bcal-week-day-name { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-2); }
+        .bcal-week-day-num { font-size: 18px; font-weight: 700; letter-spacing: -0.4px; color: var(--text); }
+        .bcal-week-header-cell.today-header .bcal-week-day-num { color: var(--today, #dc2626); }
+        .bcal-week-day-total { font-size: 10px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+        .bcal-week-body { display: grid; grid-template-columns: 56px repeat(5, 1fr); overflow-y: auto; max-height: 560px; }
+        .bcal-time-col { border-right: 1px solid var(--border); }
+        .bcal-time-slot-label { height: 52px; display: flex; align-items: flex-start; justify-content: flex-end; padding: 3px 6px 0 0; font-size: 10px; color: var(--text-3); font-family: 'DM Mono', monospace; }
+        .bcal-day-col { border-left: 1px solid var(--border); position: relative; }
+        .bcal-hour-row { height: 52px; border-bottom: 1px solid var(--border); }
+
+        .bcal-event {
+            position: absolute; border-radius: 5px; padding: 3px 6px; font-size: 10.5px; font-weight: 500;
+            cursor: pointer; overflow: hidden; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+            transition: box-shadow 0.2s, transform 0.2s, z-index 0s; line-height: 1.3;
+        }
+        .bcal-event:hover { z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: scale(1.01); }
+        .bcal-event-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bcal-event-amount { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700; }
+        .bcal-event-sub { font-size: 9px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bcal-zero { opacity: 0.55; }
+
+        .bcal-popup {
+            position: fixed; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+            padding: 18px 18px 18px 22px; width: 300px; z-index: 1000; border: 1px solid var(--border);
+            animation: popIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes popIn { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
+        .bcal-popup-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
+        .bcal-popup-close { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--surface-2); color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+        .bcal-popup-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; padding-right: 18px; letter-spacing: -0.2px; }
+        .bcal-popup-row { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 7px; font-size: 12.5px; color: var(--text-2); }
+        .bcal-popup-row i { margin-top: 1px; flex-shrink: 0; }
+        .bcal-popup-amount { font-size: 20px; font-weight: 800; color: var(--text); margin: 8px 0; }
+        .bcal-popup-calc { font-size: 11.5px; color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; line-height: 1.6; font-family: 'DM Mono', monospace; }
+        #bcal-overlay { display: none; position: fixed; inset: 0; z-index: 999; }
+
         @media (max-width: 768px) {
             header { padding: 8px 12px; height: auto; }
             .tabs-nav { padding: 0 12px; }
             .tab-panel { padding: 14px; }
+            .bcal-week-header { grid-template-columns: 36px repeat(5, 1fr); }
+            .bcal-week-body { grid-template-columns: 36px repeat(5, 1fr); max-height: 460px; }
         }
     </style>
 </head>
@@ -312,17 +401,25 @@
 
     <div class="panel-card">
         <h3>Budget par séance</h3>
-        <div class="inline-fields" style="margin-bottom:14px;">
-            <div class="field-group">
-                <label class="field-label">Promo</label>
+        <p style="font-size:12px; color:var(--text-2); margin-bottom:14px;">
+            Montant = Heures × Coefficient (maquette) × Σ tarif(s) horaire(s) des enseignants. Cliquez sur une séance pour le détail du calcul.
+        </p>
+
+        <div class="bcal-toolbar">
+            <div class="inline-fields" style="margin:0; gap:10px;">
                 <div class="pill-group" id="budget-promo-pills"></div>
+                <button class="btn-today" onclick="bcalToday()">Aujourd'hui</button>
+                <button class="btn-nav" onclick="bcalNavigate(-1)"><i class="bi bi-chevron-left"></i></button>
+                <button class="btn-nav" onclick="bcalNavigate(1)"><i class="bi bi-chevron-right"></i></button>
+                <span class="current-period" id="bcal-period"></span>
+            </div>
+            <div class="view-switcher">
+                <button class="view-btn active" data-bview="week" onclick="bcalSetView('week')">Semaine</button>
+                <button class="view-btn" data-bview="month" onclick="bcalSetView('month')">Mois</button>
             </div>
         </div>
-        <p style="font-size:12px; color:var(--text-2); margin-bottom:14px;">
-            Montant = Heures × Coefficient (maquette) × Σ tarif(s) horaire(s) des enseignants.
-        </p>
-        <button class="copy-btn" onclick="copyBudgetSeances()"><i class="bi bi-clipboard"></i> Copier le tableau</button>
-        <div class="table-scroll"><table class="data-table" id="budget-seances-table"></table></div>
+
+        <div id="bcal-container"><div id="bcal-calendar"></div></div>
     </div>
 
     <div class="panel-card">
@@ -627,20 +724,19 @@ function renderTableHTML(headers, rows, rowClassFn) {
 // ==========================================================
 function initExamsTab() {
     const p1Exams = [], p2Exams = [];
-    for (const e of ALL_EVENTS_FLAT) {
-        if (e.description && e.description.toUpperCase().includes('EXAMEN')) {
-            const row = {
-                Date: e.startDt.toLocaleDateString('fr-FR'),
-                Horaire: `${fmt2(e.startDt.getHours())}:${fmt2(e.startDt.getMinutes())} - ${fmt2(e.endDt.getHours())}:${fmt2(e.endDt.getMinutes())}`,
-                Matière: e.summary,
-                Description: e.description
-            };
-            if (e.promo_label === 'P1') p1Exams.push(row);
-            else if (e.promo_label === 'P2') p2Exams.push(row);
-        }
+    const examEvents = ALL_EVENTS_FLAT.filter(e => e.description && e.description.toUpperCase().includes('EXAMEN'));
+    examEvents.sort((a, b) => a.startDt - b.startDt); // ordre chronologique réel, du plus tôt au plus tard
+
+    for (const e of examEvents) {
+        const row = {
+            Date: e.startDt.toLocaleDateString('fr-FR'),
+            Horaire: `${fmt2(e.startDt.getHours())}:${fmt2(e.startDt.getMinutes())} - ${fmt2(e.endDt.getHours())}:${fmt2(e.endDt.getMinutes())}`,
+            Matière: e.summary,
+            Description: e.description
+        };
+        if (e.promo_label === 'P1') p1Exams.push(row);
+        else if (e.promo_label === 'P2') p2Exams.push(row);
     }
-    p1Exams.sort((a,b) => a.Date.localeCompare(b.Date));
-    p2Exams.sort((a,b) => a.Date.localeCompare(b.Date));
 
     document.getElementById('exams-table-p1').innerHTML = renderTableHTML(['Date','Horaire','Matière','Description'], p1Exams);
     document.getElementById('exams-table-p2').innerHTML = renderTableHTML(['Date','Horaire','Matière','Description'], p2Exams);
@@ -907,7 +1003,7 @@ function seanceAmount(ev) {
 function setBudgetPromo(promo) {
     budgetPromo = promo;
     document.querySelectorAll('#budget-promo-pills .pill-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === promo));
-    renderBudgetSeancesTable();
+    bcalRender();
 }
 
 function initBudgetTab() {
@@ -923,7 +1019,7 @@ function initBudgetTab() {
     ).join('');
 
     renderBudgetGlobalMetrics();
-    renderBudgetSeancesTable();
+    bcalInit();
     renderBudgetMonthTable();
     renderBudgetYearMetrics();
 }
@@ -942,40 +1038,288 @@ function renderBudgetGlobalMetrics() {
     `;
 }
 
-// ── Budget par séance (détail, comme la feuille Facturation Excel) ──
-function renderBudgetSeancesTable() {
-    const evs = getPromoEvents(budgetPromo).slice().sort((a,b) => a.startDt - b.startDt);
+// ==========================================================
+// MINI CALENDRIER BUDGET — vue Semaine / Mois avec montant par séance
+// ==========================================================
+let bcalView = 'week';
+let bcalDate = new Date();
+let BCAL_REGISTRY = [];
 
-    const headers = ['Date','Heures','Matière','Enseignant(s)','Groupes','Coeff.','Tarif(s)','Durée (h)','Montant'];
-    const rowsDisplay = evs.map(ev => {
-        const coeff = getSubjectCoeff(ev.summary);
-        const teachers = ev.teachers || [];
-        const rates = teachers.map(t => getTeacherRate(t));
-        const amount = seanceAmount(ev);
-        return {
-            'Date': ev.startDt.toLocaleDateString('fr-FR'),
-            'Heures': `${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())} - ${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())}`,
-            'Matière': ev.summary,
-            'Enseignant(s)': teachers.join(' / ') || '—',
-            'Groupes': (ev.groups||[]).join(', ') || 'Promo entière',
-            'Coeff.': coeff,
-            'Tarif(s)': rates.length ? rates.map(r => fmtEUR(r)).join(' + ') : '—',
-            'Durée (h)': Math.round(durH(ev)*100)/100,
-            'Montant': fmtEUR(amount),
-            _amount: amount,
-        };
-    });
-
-    const table = document.getElementById('budget-seances-table');
-    if (rowsDisplay.length === 0) {
-        table.innerHTML = `<tbody><tr><td><div class="empty-state"><i class="bi bi-inbox"></i>Aucune séance disponible.</div></td></tr></tbody>`;
-        return;
-    }
-    table.innerHTML = renderTableHTML(headers, rowsDisplay, (row) => row._amount === 0 ? 'row-warn' : '');
+const BCAL_COLORS = [
+    { bg:'#eff6ff', border:'#2563eb', text:'#1d4ed8' },
+    { bg:'#f5f3ff', border:'#7c3aed', text:'#6d28d9' },
+    { bg:'#ecfdf5', border:'#059669', text:'#047857' },
+    { bg:'#fffbeb', border:'#d97706', text:'#b45309' },
+    { bg:'#fdf2f8', border:'#db2777', text:'#be185d' },
+    { bg:'#f0fdf4', border:'#16a34a', text:'#15803d' },
+    { bg:'#fff7ed', border:'#ea580c', text:'#c2410c' },
+    { bg:'#f0f9ff', border:'#0284c7', text:'#0369a1' },
+];
+function bcalColor(title) {
+    let h = 0;
+    for (const c of String(title)) h = ((h<<5)-h)+c.charCodeAt(0);
+    return BCAL_COLORS[Math.abs(h) % BCAL_COLORS.length];
 }
 
-function copyBudgetSeances() {
-    copyTableToClipboard('budget-seances-table');
+function bcalAddDays(d,n) { const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function bcalSameDay(a,b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function bcalIsToday(d) { return bcalSameDay(d, new Date()); }
+function bcalMonday(d) { const r=new Date(d); const dow=r.getDay(); r.setDate(r.getDate()+(dow===0?-6:1-dow)); return r; }
+const BCAL_MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const BCAL_DAYS_S = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+
+function bcalDayEvents(date) {
+    return getPromoEvents(budgetPromo).filter(ev => bcalSameDay(ev.startDt, date));
+}
+
+// Colonnes parallèles pour la vue semaine (chevauchements)
+function bcalComputeColumns(events) {
+    const sorted = [...events].map((ev, idx) => ({ ev, idx })).sort((a, b) => a.ev.startDt - b.ev.startDt);
+    const result = new Array(events.length);
+    const groups = [];
+    for (const { ev, idx } of sorted) {
+        let placed = false;
+        for (const grp of groups) {
+            const lastEndMax = grp.reduce((m, x) => Math.max(m, x.ev.endDt.getTime()), 0);
+            if (ev.startDt.getTime() < lastEndMax) {
+                const usedCols = new Set(grp.map(x => x.col));
+                let col = 0;
+                while (usedCols.has(col)) col++;
+                grp.push({ ev, idx, col });
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) groups.push([{ ev, idx, col: 0 }]);
+    }
+    for (const grp of groups) {
+        const total = Math.max(...grp.map(x => x.col)) + 1;
+        for (const { idx, col } of grp) result[idx] = { col, totalCols: total };
+    }
+    return result;
+}
+
+function bcalSetView(v) {
+    bcalView = v;
+    document.querySelectorAll('#panel-budget .view-btn').forEach(b => b.classList.toggle('active', b.dataset.bview === v));
+    bcalRender();
+}
+
+function bcalNavigate(dir) {
+    if (bcalView === 'month') bcalDate = new Date(bcalDate.getFullYear(), bcalDate.getMonth()+dir, 1);
+    else bcalDate = bcalAddDays(bcalDate, dir*7);
+    bcalRender();
+}
+
+function bcalToday() { bcalDate = new Date(); bcalRender(); }
+
+function bcalUpdateLabel() {
+    const el = document.getElementById('bcal-period');
+    if (!el) return;
+    if (bcalView === 'month') {
+        el.textContent = `${BCAL_MONTHS[bcalDate.getMonth()]} ${bcalDate.getFullYear()}`;
+    } else {
+        const mon = bcalMonday(bcalDate), fri = bcalAddDays(mon,4);
+        el.textContent = mon.getMonth()===fri.getMonth()
+            ? `${mon.getDate()} – ${fri.getDate()} ${BCAL_MONTHS[mon.getMonth()]} ${mon.getFullYear()}`
+            : `${mon.getDate()} ${BCAL_MONTHS[mon.getMonth()]} – ${fri.getDate()} ${BCAL_MONTHS[fri.getMonth()]} ${fri.getFullYear()}`;
+    }
+}
+
+function bcalReg(ev) {
+    const idx = BCAL_REGISTRY.length;
+    BCAL_REGISTRY.push(ev);
+    return idx;
+}
+
+function bcalEventCard(ev, styleExtra) {
+    const c = bcalColor(ev.summary);
+    const amount = seanceAmount(ev);
+    const idx = bcalReg(ev);
+    const zeroCls = amount === 0 ? ' bcal-zero' : '';
+    return `<div class="bcal-event${zeroCls}"
+        style="${styleExtra}background:${c.bg};color:${c.text};border-left:3px solid ${c.border}"
+        data-bev="${idx}">
+        <div class="bcal-event-amount">${fmtEUR(amount)}</div>
+        <div class="bcal-event-title">${esc(ev.summary)}</div>
+        <div class="bcal-event-sub">${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())}–${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())}</div>
+    </div>`;
+}
+
+function bcalRenderWeek() {
+    BCAL_REGISTRY = [];
+    const cal = document.getElementById('bcal-calendar');
+    const mon = bcalMonday(bcalDate);
+    const days = Array.from({length:5}, (_,i) => bcalAddDays(mon,i));
+    const SH=7, EH=20, HPX=52;
+
+    let header = `<div class="bcal-week-header"><div class="bcal-week-header-cell"></div>
+    ${days.map(d => {
+        const dayTotal = bcalDayEvents(d).reduce((s,ev) => s + seanceAmount(ev), 0);
+        return `<div class="bcal-week-header-cell${bcalIsToday(d)?' today-header':''}">
+        <div class="bcal-week-day-name">${BCAL_DAYS_S[d.getDay()]} ${d.getDate()}</div>
+        ${dayTotal > 0 ? `<div class="bcal-week-day-total">${fmtEUR(dayTotal)}</div>` : ''}
+    </div>`;
+    }).join('')}</div>`;
+
+    let timeCol = `<div class="bcal-time-col">`;
+    for (let h=SH; h<=EH; h++) timeCol += `<div class="bcal-time-slot-label">${fmt2(h)}:00</div>`;
+    timeCol += `</div>`;
+
+    let cols = days.map(day => {
+        let slots = ''; for (let h=SH; h<=EH; h++) slots += `<div class="bcal-hour-row"></div>`;
+        const evs = bcalDayEvents(day);
+        const layout = bcalComputeColumns(evs);
+
+        let evHtml = evs.map((ev, i) => {
+            const { col, totalCols } = layout[i] || { col:0, totalCols:1 };
+            const sh = ev.startDt.getHours()+ev.startDt.getMinutes()/60;
+            const eh = ev.endDt.getHours()+ev.endDt.getMinutes()/60;
+            const top = (sh-SH)*HPX, height = Math.max((eh-sh)*HPX,30);
+            const pct = 100/totalCols;
+            const style = `top:${top}px;height:${height}px;left:${col*pct}%;width:${pct-0.8}%;`;
+            return bcalEventCard(ev, style);
+        }).join('');
+
+        return `<div class="bcal-day-col">${slots}<div style="position:absolute;inset:0;overflow:hidden"><div style="position:relative;height:100%">${evHtml}</div></div></div>`;
+    }).join('');
+
+    cal.innerHTML = `<div class="bcal-week-grid">${header}<div class="bcal-week-body">${timeCol}${cols}</div></div>`;
+    const body = cal.querySelector('.bcal-week-body');
+    if (body) body.scrollTop = (8-SH)*HPX;
+    bcalBindClicks(cal);
+}
+
+function bcalRenderMonth() {
+    BCAL_REGISTRY = [];
+    const cal = document.getElementById('bcal-calendar');
+    const yr = bcalDate.getFullYear(), mo = bcalDate.getMonth();
+    const first = new Date(yr,mo,1), last = new Date(yr,mo+1,0);
+    let sdow = first.getDay(); if (sdow===0) sdow=7;
+    let d = bcalAddDays(first, -(sdow-1));
+
+    let html = `<div class="bcal-month-grid">
+    <div class="bcal-month-header">
+    ${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(n => `<div class="bcal-day-name">${n}</div>`).join('')}
+    </div><div class="bcal-month-body">`;
+
+    for (let row=0; row<6; row++) {
+        for (let col=0; col<7; col++) {
+            const inMonth = d.getMonth()===mo;
+            const todayCell = bcalIsToday(d);
+            const evs = bcalDayEvents(d);
+            const dayTotal = evs.reduce((s,ev) => s + seanceAmount(ev), 0);
+            const max = 3;
+            let cls = `bcal-month-cell${!inMonth?' other-month':' current-month'}${todayCell?' today-cell':''}`;
+            let evHtml = evs.slice(0,max).map(ev => {
+                const c = bcalColor(ev.summary);
+                const idx = bcalReg(ev);
+                const amount = seanceAmount(ev);
+                return `<div class="bcal-event-pill" data-bev="${idx}"
+                    style="background:${c.bg};color:${c.text}">
+                    ${fmtEUR(amount)} · ${esc(ev.summary)}</div>`;
+            }).join('');
+            if (evs.length > max) evHtml += `<div class="bcal-more">+${evs.length-max} autre${evs.length-max>1?'s':''}</div>`;
+            const totalHtml = dayTotal > 0 ? `<div class="bcal-month-day-total">${fmtEUR(dayTotal)}</div>` : '';
+            html += `<div class="${cls}"><div class="bcal-day-number">${d.getDate()}</div>${totalHtml}${evHtml}</div>`;
+            d = bcalAddDays(d,1);
+        }
+        if (d>last && row>=4) break;
+    }
+    html += `</div></div>`;
+    cal.innerHTML = html;
+    bcalBindClicks(cal);
+}
+
+function bcalRender() {
+    bcalUpdateLabel();
+    if (bcalView === 'month') bcalRenderMonth();
+    else bcalRenderWeek();
+}
+
+function bcalInit() {
+    // Positionner la vue sur la 1ère séance disponible de la promo, sinon aujourd'hui
+    const evs = getPromoEvents(budgetPromo);
+    if (evs.length) {
+        const earliest = evs.reduce((min, e) => e.startDt < min.startDt ? e : min, evs[0]);
+        bcalDate = new Date(earliest.startDt);
+    } else {
+        bcalDate = new Date();
+    }
+    bcalView = 'week';
+    document.querySelectorAll('#panel-budget .view-btn').forEach(b => b.classList.toggle('active', b.dataset.bview === 'week'));
+    bcalRender();
+}
+
+function bcalBindClicks(root) {
+    root.addEventListener('click', function(e) {
+        const el = e.target.closest('[data-bev]');
+        if (!el) return;
+        e.stopPropagation();
+        const ev = BCAL_REGISTRY[parseInt(el.dataset.bev, 10)];
+        if (ev) bcalShowPopup(e, ev, el);
+    });
+}
+
+function bcalShowPopup(e, ev, triggerEl) {
+    let popup = document.getElementById('bcal-popup');
+    let overlay = document.getElementById('bcal-overlay');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'bcal-popup';
+        popup.className = 'bcal-popup';
+        popup.style.display = 'none';
+        document.body.appendChild(popup);
+    }
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'bcal-overlay';
+        overlay.onclick = bcalClosePopup;
+        document.body.appendChild(overlay);
+    }
+
+    const c = bcalColor(ev.summary);
+    const coeff = getSubjectCoeff(ev.summary);
+    const teachers = ev.teachers || [];
+    const rates = teachers.map(t => getTeacherRate(t));
+    const rateSum = rates.reduce((s,r) => s+r, 0);
+    const hours = durH(ev);
+    const amount = seanceAmount(ev);
+    const dateStr = `${ev.startDt.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}`;
+
+    const groupsHtml = (ev.groups && ev.groups.length)
+        ? ev.groups.join(', ') : 'Promo entière';
+    const teachersHtml = teachers.length ? teachers.join(' / ') : '—';
+
+    popup.innerHTML = `
+        <div class="bcal-popup-bar" style="background:${c.border}"></div>
+        <button class="bcal-popup-close" onclick="bcalClosePopup()"><i class="bi bi-x"></i></button>
+        <div class="bcal-popup-title">${esc(ev.summary)}</div>
+        <div class="bcal-popup-row"><i class="bi bi-calendar3"></i><div>${dateStr}</div></div>
+        <div class="bcal-popup-row"><i class="bi bi-clock"></i><div>${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())} – ${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())} (${Math.round(hours*100)/100} h)</div></div>
+        <div class="bcal-popup-row"><i class="bi bi-person"></i><div>${esc(teachersHtml)}</div></div>
+        <div class="bcal-popup-row"><i class="bi bi-people"></i><div>${esc(groupsHtml)}</div></div>
+        <div class="bcal-popup-amount">${fmtEUR(amount)}</div>
+        <div class="bcal-popup-calc">${Math.round(hours*100)/100} h × ${coeff} (coeff.) × ${fmtEUR(rateSum)}${rates.length>1?` (${rates.map(r=>fmtEUR(r)).join(' + ')})`:''}</div>
+    `;
+
+    const rect = triggerEl ? triggerEl.getBoundingClientRect() : { left: e.clientX, top: e.clientY, right: e.clientX };
+    let left = rect.right + 10, top = rect.top;
+    if (left + 310 > window.innerWidth) left = rect.left - 310;
+    if (left < 8) left = 8;
+    if (top + 320 > window.innerHeight) top = window.innerHeight - 328;
+    if (top < 70) top = 70;
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+    popup.style.display = 'block';
+    overlay.style.display = 'block';
+}
+
+function bcalClosePopup() {
+    const popup = document.getElementById('bcal-popup');
+    const overlay = document.getElementById('bcal-overlay');
+    if (popup) popup.style.display = 'none';
+    if (overlay) overlay.style.display = 'none';
 }
 
 // ── Budget par mois (P1+P2 combinées) ──
