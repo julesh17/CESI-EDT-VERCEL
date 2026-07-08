@@ -781,22 +781,28 @@ function generateIcsString(events, includePrefix) {
         }
 
         const descLines = [];
+        const room = ev.room || ev.location || '';
+        if (room) descLines.push('Salle: ' + room);
         if (ev.description) descLines.push(ev.description);
         if (ev.teachers && ev.teachers.length) descLines.push('Enseignant(s): ' + ev.teachers.join(' / '));
         if (ev.groups && ev.groups.length) {
             descLines.push(ev.groups.length === 1 ? ('Groupe: ' + ev.groups[0]) : ('Groupes: ' + ev.groups.join(' et ')));
         }
 
-        body.push(
+        const lines = [
             'BEGIN:VEVENT',
             `UID:${uid}`,
             `DTSTAMP:${fmtIcsDt(new Date())}Z`,
             `DTSTART;TZID=Europe/Paris:${fmtIcsDt(ev.startDt)}`,
             `DTEND;TZID=Europe/Paris:${fmtIcsDt(ev.endDt)}`,
             `SUMMARY:${escIcalText(summaryText)}`,
+        ];
+        if (room) lines.push(`LOCATION:${escIcalText(room)}`);
+        lines.push(
             `DESCRIPTION:${escIcalText(descLines.join('\n'))}`,
             'END:VEVENT'
         );
+        body.push(...lines);
     }
     return header.concat(body, ['END:VCALENDAR']).join('\r\n');
 }
@@ -1290,6 +1296,7 @@ function bcalShowPopup(e, ev, triggerEl) {
     const groupsHtml = (ev.groups && ev.groups.length)
         ? ev.groups.join(', ') : 'Promo entière';
     const teachersHtml = teachers.length ? teachers.join(' / ') : '—';
+    const roomHtml = ev.room ? esc(ev.room) : '—';
 
     popup.innerHTML = `
         <div class="bcal-popup-bar" style="background:${c.border}"></div>
@@ -1297,6 +1304,7 @@ function bcalShowPopup(e, ev, triggerEl) {
         <div class="bcal-popup-title">${esc(ev.summary)}</div>
         <div class="bcal-popup-row"><i class="bi bi-calendar3"></i><div>${dateStr}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-clock"></i><div>${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())} – ${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())} (${Math.round(hours*100)/100} h)</div></div>
+        <div class="bcal-popup-row"><i class="bi bi-geo-alt"></i><div>${roomHtml}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-person"></i><div>${esc(teachersHtml)}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-people"></i><div>${esc(groupsHtml)}</div></div>
         <div class="bcal-popup-amount">${fmtEUR(amount)}</div>
