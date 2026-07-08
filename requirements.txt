@@ -9,3 +9,5 @@ ics
 supabase
 jinja2
 itsdangerous
+starlette
+pdfplumber
