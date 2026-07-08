@@ -442,6 +442,9 @@ function evCard(ev, styleExtra, fontSize) {
     const gBadge = (ev.groups||[]).length
         ? (ev.groups).map(g=>`<span class="ev-group-badge">${esc(g)}</span>`).join('')
         : '';
+    const room = ev.room
+        ? `<div class="cal-event-sub"><i class="bi bi-geo-alt" style="font-size:9px"></i> ${esc(ev.room)}</div>`
+        : '';
     const teacher = (ev.teachers||[]).length
         ? `<div class="cal-event-sub"><i class="bi bi-person" style="font-size:9px"></i> ${esc(ev.teachers.join(', '))}</div>`
         : '';
@@ -451,6 +454,7 @@ function evCard(ev, styleExtra, fontSize) {
         <div class="cal-event-time">${fmtTime(ev.startDt)}–${fmtTime(ev.endDt)}</div>
         <div class="cal-event-title">${esc(ev.summary)}</div>
         ${gBadge ? `<div class="cal-event-sub">${gBadge}</div>` : ''}
+        ${room}
         ${teacher}
     </div>`;
 }
@@ -479,9 +483,10 @@ function renderMonth() {
                 const c=getColor(ev.summary);
                 const idx=reg(ev);
                 const gBadge=(ev.groups||[]).length?`<span class="ev-group-badge">${esc((ev.groups).join('·'))}</span>`:'';
+                const roomTxt = ev.room ? ` · ${esc(ev.room)}` : '';
                 return `<div class="month-event" data-ev="${idx}"
                     style="background:${c.bg};color:${c.text};border-left:3px solid ${c.border}">
-                    ${gBadge}${fmtTime(ev.startDt)} ${esc(ev.summary)}</div>`;
+                    ${gBadge}${fmtTime(ev.startDt)} ${esc(ev.summary)}${roomTxt}</div>`;
             }).join('');
             if(evs.length>max) evHtml+=`<div class="month-more">+${evs.length-max} autre${evs.length-max>1?'s':''}</div>`;
             html+=`<div class="${cls}"><div class="day-number">${d.getDate()}</div>${evHtml}</div>`;
@@ -599,6 +604,7 @@ function showPopup(e, ev, triggerEl) {
 
     const groups = ev.groups || [];
     const teachers = ev.teachers || [];
+    const room = ev.room || '';
     const description = ev.description || '';
 
     // Description : chaque segment séparé par | devient une ligne
@@ -625,6 +631,7 @@ function showPopup(e, ev, triggerEl) {
             <div><strong>${fmtTime(startDt)} – ${fmtTime(endDt)}</strong>
             <span style="color:var(--text-3)"> (${durStr})</span></div>
         </div>
+        ${room ? `<div class="popup-row"><i class="bi bi-geo-alt"></i><div>${esc(room)}</div></div>` : ''}
         ${teachers.length ? `<div class="popup-row"><i class="bi bi-person"></i><div>${esc(teachers.join(' / '))}</div></div>` : ''}
         ${groupHtml}
         ${descHtml}
