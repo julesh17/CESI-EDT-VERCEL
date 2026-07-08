@@ -331,19 +331,15 @@
 
                     <form action="/inject-rooms/{{ p.slug }}" method="post" enctype="multipart/form-data">
                         <label class="small text-muted fw-bold mb-2 d-flex align-items-center" style="font-size: 11px;">
-                            <i class="bi bi-door-open me-1"></i> INJECTER LES SALLES DEPUIS OPUS (.pdf)
+                            <i class="bi bi-file-earmark-pdf me-1"></i> INJECTER LES SALLES DEPUIS OPUS (.pdf)
                         </label>
                         <div class="input-group">
                             <input type="file" name="file"
                                    class="form-control form-control-sm form-control-apple"
                                    accept=".pdf,application/pdf" required>
-                            <button class="btn btn-sm btn-primary-apple text-nowrap" type="submit" title="Injecter les salles depuis Opus">
-                                <i class="bi bi-door-open"></i>
-                                <span class="d-none d-md-inline ms-1">Injecter les salles depuis Opus</span>
+                            <button class="btn btn-sm btn-primary-apple" type="submit" title="Injecter les salles depuis Opus">
+                                <i class="bi bi-cloud-arrow-up-fill"></i>
                             </button>
-                        </div>
-                        <div class="form-text small text-muted mt-1" style="font-size: 11px;">
-                            Rapprochement uniquement par promo/groupe, date, début et fin. Les matières et intervenants d'Opus sont ignorés.
                         </div>
                     </form>
 
