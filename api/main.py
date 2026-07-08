@@ -613,6 +613,98 @@ def parse_opus_targets(group_value: str) -> List[dict]:
     return [{"promo": promo, "subgroup": subgroup}]
 
 
+def merge_pdf_table_rows(left: list, right: list) -> list:
+    """
+    Fusionne deux fragments de ligne Opus.
+
+    Cas réel observé dans le PDF fourni : une séance en bas de page peut finir sur
+    la page suivante. Exemple page 23 -> 24 :
+      ['mar.', '13:30', '17:3', 'Electrotechnique et électronique de', ...]
+      ['30/09/25', '', '0', 'puissance', 'promos', ...]
+    La fusion redonne une ligne exploitable par les parseurs regex.
+    """
+    left = (left + [None] * 9)[:9]
+    right = (right + [None] * 9)[:9]
+    merged = []
+    for a, b in zip(left, right):
+        sa = clean_pdf_cell(a)
+        sb = clean_pdf_cell(b)
+        if sa and sb:
+            merged.append(f"{sa} {sb}")
+        else:
+            merged.append(sa or sb)
+    return merged
+
+
+def is_opus_header_row(row: list) -> bool:
+    row = (row + [None] * 9)[:9]
+    joined = " ".join(clean_pdf_cell(c).lower() for c in row)
+    return "date" in joined and "début" in joined and "fin" in joined and "salle" in joined
+
+
+def row_has_meaningful_text(row: list) -> bool:
+    return any(clean_pdf_cell(c) for c in (row or []))
+
+
+def row_looks_like_event_fragment(row: list) -> bool:
+    """Détecte une ligne qui ressemble au début ou à un morceau de séance Opus."""
+    row = (row + [None] * 9)[:9]
+    return bool(
+        clean_pdf_cell(row[0])
+        or parse_opus_time(row[1])
+        or parse_opus_time(row[2])
+        or clean_pdf_cell(row[3])
+        or clean_pdf_cell(row[4])
+        or clean_pdf_cell(row[5])
+        or clean_pdf_cell(row[6])
+    )
+
+
+def row_looks_like_page_continuation(previous_row: list, current_row: list) -> bool:
+    """
+    Vrai si current_row semble compléter previous_row après un saut de page.
+
+    On évite volontairement les lignes de salles additionnelles normales : elles
+    portent généralement date + début + fin + salle, et doivent être rattachées au
+    créneau précédent plutôt que fusionnées avec la dernière ligne de la page.
+    """
+    if not previous_row or not current_row:
+        return False
+    previous_row = (previous_row + [None] * 9)[:9]
+    current_row = (current_row + [None] * 9)[:9]
+
+    if not row_has_meaningful_text(current_row):
+        return False
+    if not row_looks_like_event_fragment(previous_row):
+        return False
+    if is_opus_header_row(current_row):
+        return False
+
+    current_has_start = parse_opus_time(current_row[1]) is not None
+    current_has_targets = bool(parse_opus_targets(clean_pdf_cell(current_row[5])))
+
+    # Une vraie nouvelle séance a presque toujours un début. Une continuation de
+    # haut de page complète plutôt la date, la fin, la matière, le découpage ou la salle.
+    if current_has_start or current_has_targets:
+        return False
+
+    previous_missing_date = parse_opus_date(previous_row[0]) is None
+    current_supplies_date = parse_opus_date(current_row[0]) is not None
+    previous_end_txt = clean_pdf_cell(previous_row[2])
+    current_end_txt = clean_pdf_cell(current_row[2])
+
+    # Signaux forts vus dans le PDF : date seule en haut de page, minute finale
+    # isolée, ou mots de fin de cellule matière/découpage/salle.
+    if previous_missing_date and current_supplies_date:
+        return True
+    if re.match(r"^\d{1,2}:\d$", previous_end_txt.replace(" ", "")) and re.match(r"^\d$", current_end_txt):
+        return True
+    if any(clean_pdf_cell(current_row[i]) for i in (3, 4, 6, 7, 8)) and not current_has_start:
+        return True
+
+    return False
+
+
 def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
     """
     Parse le PDF Opus/FNG et retourne uniquement les lignes exploitables pour les salles.
@@ -621,12 +713,12 @@ def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
     groupe et salle. Les matières et intervenants d'Opus sont ignorés car ils peuvent
     différer du planning principal.
 
-    Le PDF fourni a des colonnes tabulaires : Date / Début / Fin / Matière /
-    Découpage / Groupe / Salle / Intervenant / Session(s). pdfplumber détecte bien
-    les bordures et remonte les salles multi-lignes avec des retours à la ligne.
-    Certaines salles supplémentaires apparaissent sur une ligne séparée avec date,
-    heure et salle, mais sans groupe : elles sont rattachées à la dernière séance
-    réelle ayant le même créneau.
+    Points importants validés sur le PDF fourni :
+      - les dates sont extraites par regex JJ/MM/AA, jamais par dateutil sur "mar." ;
+      - les heures coupées ("12:3\n0", "17:3" + "0") sont recomposées ;
+      - les salles multi-lignes ("A012 Pléïades\n2") sont conservées ;
+      - les lignes coupées entre deux pages sont fusionnées avant parsing ;
+      - les salles supplémentaires sur une ligne séparée sont rattachées au même créneau.
     """
     try:
         import pdfplumber
@@ -648,6 +740,52 @@ def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
         "text_y_tolerance": 3,
     }
 
+    def process_row(row: list, pages: List[int]):
+        row = (row + [None] * 9)[:9]
+        if is_opus_header_row(row):
+            return
+
+        day = parse_opus_date(row[0])
+        start_t = parse_opus_time(row[1])
+        end_t = parse_opus_time(row[2])
+        if not (day and start_t and end_t):
+            return
+
+        room = normalize_room_label(row[6])
+        if not room:
+            return
+
+        group_label = clean_pdf_cell(row[5])
+        targets = parse_opus_targets(group_label)
+        slot_key = (day, start_t, end_t)
+
+        if targets:
+            entry = {
+                "page": pages[0] if pages else None,
+                "pages": pages,
+                "start": datetime.combine(day, start_t),
+                "end": datetime.combine(day, end_t),
+                "targets": targets,
+                "room": room,
+                "rooms": [room],
+                "pdf_group": group_label,
+            }
+            entries.append(entry)
+            last_entry_by_slot[slot_key] = entry
+        else:
+            # Salle sur une ligne de continuation : on la rattache au créneau précédent.
+            previous = last_entry_by_slot.get(slot_key)
+            if previous:
+                previous["rooms"].append(room)
+                previous["room"] = " / ".join(dict.fromkeys(previous["rooms"]))
+                previous_pages = previous.setdefault("pages", [])
+                for p in pages:
+                    if p not in previous_pages:
+                        previous_pages.append(p)
+
+    pending_last_row = None
+    pending_last_pages: List[int] = []
+
     with pdfplumber.open(io.BytesIO(file_content)) as pdf:
         for page_number, page in enumerate(pdf.pages, start=1):
             try:
@@ -655,43 +793,39 @@ def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
             except Exception:
                 table = []
 
-            if not table:
+            data_rows = []
+            for raw_row in table:
+                row = (list(raw_row or []) + [None] * 9)[:9]
+                if is_opus_header_row(row):
+                    continue
+                if not row_has_meaningful_text(row):
+                    continue
+                data_rows.append(row)
+
+            # Si la page précédente s'est terminée sur un fragment, vérifier si la
+            # première ligne de cette page le complète.
+            if pending_last_row is not None:
+                if data_rows and row_looks_like_page_continuation(pending_last_row, data_rows[0]):
+                    merged_row = merge_pdf_table_rows(pending_last_row, data_rows[0])
+                    process_row(merged_row, pending_last_pages + [page_number])
+                    data_rows = data_rows[1:]
+                else:
+                    process_row(pending_last_row, pending_last_pages)
+                pending_last_row = None
+                pending_last_pages = []
+
+            if not data_rows:
                 continue
 
-            for row in table[1:]:  # ligne d'en-tête ignorée
-                row = (row + [None] * 9)[:9]
-                day = parse_opus_date(row[0])
-                start_t = parse_opus_time(row[1])
-                end_t = parse_opus_time(row[2])
-                if not (day and start_t and end_t):
-                    continue
+            # On garde toujours la dernière ligne de la page en attente afin de
+            # pouvoir la fusionner avec le haut de page suivant si Opus l'a coupée.
+            for row in data_rows[:-1]:
+                process_row(row, [page_number])
+            pending_last_row = data_rows[-1]
+            pending_last_pages = [page_number]
 
-                room = normalize_room_label(row[6])
-                if not room:
-                    continue
-
-                group_label = clean_pdf_cell(row[5])
-                targets = parse_opus_targets(group_label)
-                slot_key = (day, start_t, end_t)
-
-                if targets:
-                    entry = {
-                        "page": page_number,
-                        "start": datetime.combine(day, start_t),
-                        "end": datetime.combine(day, end_t),
-                        "targets": targets,
-                        "room": room,
-                        "rooms": [room],
-                        "pdf_group": group_label,
-                    }
-                    entries.append(entry)
-                    last_entry_by_slot[slot_key] = entry
-                else:
-                    # Salle sur une ligne de continuation : on la rattache au créneau précédent.
-                    previous = last_entry_by_slot.get(slot_key)
-                    if previous:
-                        previous["rooms"].append(room)
-                        previous["room"] = " / ".join(dict.fromkeys(previous["rooms"]))
+    if pending_last_row is not None:
+        process_row(pending_last_row, pending_last_pages)
 
     # Fusion de sécurité : si le même créneau/cible apparaît plusieurs fois, on regroupe les salles.
     merged: Dict[Tuple[datetime, datetime, str, Optional[str]], dict] = {}
@@ -711,7 +845,9 @@ def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
             merged[key]["rooms"].extend(entry.get("rooms") or [entry["room"]])
             if entry.get("pdf_group"):
                 merged[key]["pdf_groups"].add(entry["pdf_group"])
-            merged[key]["pages"].add(entry.get("page"))
+            for p in (entry.get("pages") or [entry.get("page")]):
+                if p:
+                    merged[key]["pages"].add(p)
 
     out = []
     for value in merged.values():
@@ -729,7 +865,6 @@ def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
         })
 
     return out
-
 
 def parse_iso_datetime(value) -> Optional[datetime]:
     if not value:
@@ -763,14 +898,55 @@ def room_target_matches_event(entry: dict, ev: dict, promo: str) -> bool:
     if not subgroup:
         return True
 
-    groups = ev.get("groups") or []
-    return subgroup in groups
+    raw_groups = ev.get("groups") or []
+    if isinstance(raw_groups, str):
+        raw_groups = [raw_groups]
+    normalized_groups = {normalize_group_label(g) for g in raw_groups if normalize_group_label(g)}
+    return subgroup in normalized_groups
+
+
+def intervals_are_compatible(opus_start: datetime, opus_end: datetime, event_start: datetime, event_end: datetime) -> bool:
+    """
+    Vérifie la compatibilité horaire entre Opus et le calendrier interne.
+
+    Le rapprochement exact était trop strict : Opus regroupe parfois une séance
+    08:30-12:30 alors que le calendrier interne a deux séances 08:30-10:30 et
+    10:30-12:30. On accepte donc les cas où un intervalle contient l'autre.
+    Les chevauchements simplement partiels ne sont pas acceptés, afin d'éviter
+    d'injecter une salle sur une séance voisine.
+    """
+    if not (opus_start and opus_end and event_start and event_end):
+        return False
+    if opus_start.date() != event_start.date():
+        return False
+
+    # Tolérance légère pour absorber les arrondis/minutes recomposées depuis le PDF.
+    tolerance = pd.Timedelta(minutes=1).to_pytimedelta()
+
+    event_inside_opus = (opus_start - tolerance) <= event_start and event_end <= (opus_end + tolerance)
+    opus_inside_event = (event_start - tolerance) <= opus_start and opus_end <= (event_end + tolerance)
+    return event_inside_opus or opus_inside_event
+
+
+def calendar_range_overlaps(entry_start: datetime, entry_end: datetime, cal_start: datetime, cal_end: datetime) -> bool:
+    """Vrai si l'entrée Opus touche la période couverte par le calendrier."""
+    if not (entry_start and entry_end and cal_start and cal_end):
+        return False
+    return entry_end >= cal_start and entry_start <= cal_end
 
 
 def inject_rooms_into_events(events_p1: List[dict], events_p2: List[dict], room_entries: List[dict]) -> dict:
     """
     Injecte/écrase les salles dans les événements existants.
-    Les salles ne sont appliquées que dans la période couverte par le calendrier principal.
+
+    Règles de rapprochement :
+      - même promo/groupe ;
+      - même date ;
+      - intervalle horaire exact OU intervalle Opus qui englobe la séance interne
+        OU séance interne qui englobe l'intervalle Opus.
+
+    Cela corrige les cas où Opus regroupe des créneaux de 4 h alors que le
+    calendrier interne les découpe en deux créneaux de 2 h.
     """
     cal_start, cal_end = calendar_bounds(events_p1, events_p2)
     if not cal_start or not cal_end:
@@ -785,7 +961,7 @@ def inject_rooms_into_events(events_p1: List[dict], events_p2: List[dict], room_
 
     usable_entries = [
         e for e in (room_entries or [])
-        if e.get("start") and e.get("end") and cal_start <= e["start"] <= cal_end
+        if e.get("start") and e.get("end") and calendar_range_overlaps(e["start"], e["end"], cal_start, cal_end)
     ]
 
     entry_used = [False] * len(usable_entries)
@@ -795,6 +971,10 @@ def inject_rooms_into_events(events_p1: List[dict], events_p2: List[dict], room_
         matched_count = 0
         for ev in events or []:
             ev_copy = dict(ev)
+            # Une injection Opus est une mise à jour des salles : on retire la salle
+            # précédente puis on la remet seulement si le PDF contient un match.
+            ev_copy.pop("room", None)
+
             st = parse_iso_datetime(ev_copy.get("start"))
             en = parse_iso_datetime(ev_copy.get("end"))
             if not st or not en:
@@ -803,7 +983,10 @@ def inject_rooms_into_events(events_p1: List[dict], events_p2: List[dict], room_
 
             rooms = []
             for idx, entry in enumerate(usable_entries):
-                if entry.get("start") == st and entry.get("end") == en and room_target_matches_event(entry, ev_copy, promo):
+                if (
+                    intervals_are_compatible(entry.get("start"), entry.get("end"), st, en)
+                    and room_target_matches_event(entry, ev_copy, promo)
+                ):
                     if entry.get("room"):
                         rooms.append(entry["room"])
                         entry_used[idx] = True
