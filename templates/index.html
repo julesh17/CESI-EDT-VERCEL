@@ -196,9 +196,37 @@
 
 <div class="container py-4">
 
-    {% if request.query_params.get('success') %}
+    {% if request.query_params.get('success') == 'rooms' %}
+    <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 rounded-4 mb-4" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        Salles injectées depuis Opus : {{ request.query_params.get('rooms_matched', '0') }} événement(s) mis à jour
+        sur {{ request.query_params.get('rooms_pdf', '0') }} entrée(s) de salle dans la période du calendrier.
+        {% if request.query_params.get('rooms_unmatched') and request.query_params.get('rooms_unmatched') != '0' %}
+            <span class="text-muted">{{ request.query_params.get('rooms_unmatched') }} entrée(s) non rapprochée(s).</span>
+        {% endif %}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% elif request.query_params.get('success') %}
     <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 rounded-4 mb-4" role="alert">
         <i class="bi bi-check-circle-fill me-2"></i> Le calendrier a été mis à jour avec succès.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') == 'rooms' %}
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0 rounded-4 mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        Impossible d'injecter les salles depuis le PDF Opus. Vérifiez que le fichier est bien un export PDF Opus lisible.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% elif request.query_params.get('error') == 'rooms_bad_file' %}
+    <div class="alert alert-warning alert-dismissible fade show shadow-sm border-0 rounded-4 mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> Sélectionnez un fichier PDF pour l'injection des salles.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% elif request.query_params.get('error') == 'rooms_empty_file' %}
+    <div class="alert alert-warning alert-dismissible fade show shadow-sm border-0 rounded-4 mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> Le fichier PDF sélectionné est vide.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     {% endif %}
@@ -287,7 +315,7 @@
                         </div>
                     </div>
 
-                    <form action="/upload/{{ p.slug }}" method="post" enctype="multipart/form-data">
+                    <form action="/upload/{{ p.slug }}" method="post" enctype="multipart/form-data" class="mb-3">
                         <label class="small text-muted fw-bold mb-2 d-flex align-items-center" style="font-size: 11px;">
                             <i class="bi bi-file-earmark-spreadsheet me-1"></i> METTRE À JOUR (.xlsx)
                         </label>
@@ -298,6 +326,24 @@
                             <button class="btn btn-sm btn-primary-apple" type="submit" title="Uploader">
                                 <i class="bi bi-cloud-arrow-up-fill"></i>
                             </button>
+                        </div>
+                    </form>
+
+                    <form action="/inject-rooms/{{ p.slug }}" method="post" enctype="multipart/form-data">
+                        <label class="small text-muted fw-bold mb-2 d-flex align-items-center" style="font-size: 11px;">
+                            <i class="bi bi-door-open me-1"></i> INJECTER LES SALLES DEPUIS OPUS (.pdf)
+                        </label>
+                        <div class="input-group">
+                            <input type="file" name="file"
+                                   class="form-control form-control-sm form-control-apple"
+                                   accept=".pdf,application/pdf" required>
+                            <button class="btn btn-sm btn-primary-apple text-nowrap" type="submit" title="Injecter les salles depuis Opus">
+                                <i class="bi bi-door-open"></i>
+                                <span class="d-none d-md-inline ms-1">Injecter les salles depuis Opus</span>
+                            </button>
+                        </div>
+                        <div class="form-text small text-muted mt-1" style="font-size: 11px;">
+                            Rapprochement uniquement par promo/groupe, date, début et fin. Les matières et intervenants d'Opus sont ignorés.
                         </div>
                     </form>
 
