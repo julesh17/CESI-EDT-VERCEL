@@ -1406,6 +1406,124 @@ async def view_dashboard(slug: str, request: Request):
     })
 
 
+# --- VUE PLANIFICATEUR (protégée) ---
+
+@app.get("/planifier/{slug}", response_class=HTMLResponse)
+async def view_planner(slug: str, request: Request):
+    """Page d'édition directe du planning."""
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    res = supabase.table("plannings").select("slug, name, year").ilike("slug", slug).execute()
+    if not res.data:
+        raise HTTPException(404, detail="Planning introuvable")
+
+    p = res.data[0]
+    return templates.TemplateResponse(request, "planner.html", {
+        "slug": p["slug"],
+        "planning_name": p.get("name") or p["slug"],
+        "planning_year": p.get("year", ""),
+        "user": user,
+    })
+
+
+# --- APIS JSON POUR LE PLANIFICATEUR ---
+
+def require_authenticated_user_for_api(request: Request) -> str:
+    """Retourne l'utilisateur courant ou lève une 401 pour les appels fetch()."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, detail="Authentification requise")
+    return user
+
+
+@app.get("/api/planner-data/{slug}")
+async def api_planner_data(slug: str, request: Request):
+    """Retourne toutes les données nécessaires à planner.html."""
+    require_authenticated_user_for_api(request)
+    try:
+        res = supabase.table("plannings").select(
+            "slug, name, year, events_p1, events_p2, maquette_data, teachers_data"
+        ).ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404, detail="Planning introuvable")
+
+        d = res.data[0]
+        return {
+            "slug": d.get("slug"),
+            "name": d.get("name"),
+            "year": d.get("year"),
+            "events_p1": d.get("events_p1", []) or [],
+            "events_p2": d.get("events_p2", []) or [],
+            "maquette_data": d.get("maquette_data", []) or [],
+            "teachers_data": d.get("teachers_data", []) or [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur API planner-data: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.post("/api/planner-save/{slug}")
+async def api_planner_save(slug: str, request: Request):
+    """
+    Enregistre les modifications faites depuis la page Planifier.
+
+    Le payload peut contenir un ou plusieurs champs parmi :
+      - events_p1
+      - events_p2
+      - maquette_data
+      - teachers_data
+
+    Les champs absents ne sont pas modifiés. Aucun changement de schéma SQL n'est
+    nécessaire : tout reste stocké dans les colonnes JSONB existantes.
+    """
+    require_authenticated_user_for_api(request)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="JSON invalide")
+
+    if not isinstance(payload, dict):
+        raise HTTPException(400, detail="Le payload doit être un objet JSON")
+
+    allowed_fields = {"events_p1", "events_p2", "maquette_data", "teachers_data"}
+    update_data = {}
+
+    for field in allowed_fields:
+        if field in payload:
+            if not isinstance(payload[field], list):
+                raise HTTPException(422, detail=f"{field} doit être une liste")
+            update_data[field] = payload[field]
+
+    if not update_data:
+        raise HTTPException(400, detail="Aucun champ modifiable fourni")
+
+    try:
+        # Récupère d'abord le slug réel pour rester compatible avec les recherches ilike.
+        existing = supabase.table("plannings").select("slug").ilike("slug", slug).execute()
+        if not existing.data:
+            raise HTTPException(404, detail="Planning introuvable")
+        real_slug = existing.data[0]["slug"]
+
+        update_data["updated_at"] = datetime.now(PARIS_TZ).isoformat()
+        supabase.table("plannings").update(update_data).eq("slug", real_slug).execute()
+
+        log_msg(
+            f"Planificateur sauvegardé pour {real_slug}: "
+            + ", ".join(sorted(k for k in update_data.keys() if k != "updated_at"))
+        )
+        return {"ok": True, "updated_fields": sorted(k for k in update_data.keys() if k != "updated_at")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur API planner-save: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
 # --- APIS JSON ---
 
 @app.get("/api/events/{slug}/{group}")
