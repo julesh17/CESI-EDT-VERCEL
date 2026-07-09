@@ -32,6 +32,61 @@
         #loading{display:flex;height:320px;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--text-2)}.spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
         #modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.25);z-index:500;display:none}.modal{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow-lg);z-index:501;display:none;overflow:auto}.modal.event{top:76px;right:28px;width:min(470px,calc(100vw - 32px));max-height:calc(100vh - 100px)}.modal.wide{top:42px;left:50%;transform:translateX(-50%);width:min(1180px,calc(100vw - 36px));max-height:calc(100vh - 76px)}.modal-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.modal-title{font-size:18px;font-weight:800;letter-spacing:-.35px}.modal-body{padding:18px 20px}.modal-actions{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--surface-2)}.toast{position:fixed;bottom:24px;right:24px;z-index:900;border-radius:13px;padding:12px 16px;background:var(--text);color:white;box-shadow:var(--shadow-lg);font-size:13px;font-weight:700;display:none;max-width:420px}
         @media(max-width:1100px){.page{grid-template-columns:1fr}.progress-list{max-height:330px}.week-body,.day-body{max-height:640px}}@media(max-width:760px){header{padding:10px 12px}.header-right{justify-content:flex-start}.page{padding:12px}.week-header,.week-body{grid-template-columns:44px repeat(5,160px)}.day-header,.day-body{grid-template-columns:44px 620px}.calendar-wrap{overflow-x:auto}.current-period{min-width:150px;font-size:14px}.modal.event{top:12px;right:12px}.inline,.three{grid-template-columns:1fr}}
+
+
+        /* === UX refresh: Outlook / iCal-like planning surface === */
+        :root{
+            --bg:#f6f8fc; --surface:#ffffff; --surface-2:#f3f6fb; --surface-3:#eef3fb;
+            --border:#d9e1ec; --border-strong:#c6d0df; --text:#0f172a; --text-2:#64748b;
+            --text-3:#94a3b8; --accent:#2563eb; --accent-soft:#dbeafe;
+            --shadow:0 1px 2px rgba(15,23,42,.04),0 12px 28px rgba(15,23,42,.08);
+            --shadow-lg:0 24px 70px rgba(15,23,42,.22); --radius:18px; --radius-sm:12px;
+        }
+        body{background:linear-gradient(180deg,#f8fbff 0,#f6f8fc 260px,#fff 100%);}
+        header{box-shadow:0 1px 0 rgba(15,23,42,.04);}
+        .page{max-width:1840px;gap:20px;}
+        .panel{border-color:rgba(203,213,225,.82);box-shadow:var(--shadow);}
+        .calendar-panel{background:rgba(255,255,255,.96);}
+        .toolbar{background:linear-gradient(180deg,#fff,#fbfdff);position:relative;z-index:30;}
+        .calendar-wrap{background:#fff;padding:18px;}
+        .week-grid,.day-grid,.month-grid{border-color:var(--border-strong);box-shadow:inset 0 1px 0 #fff,0 10px 26px rgba(15,23,42,.06);}
+        .week-header,.day-header{position:sticky;top:0;z-index:12;background:rgba(255,255,255,.98);backdrop-filter:blur(10px);}
+        .week-body,.day-body{background:#fff;scrollbar-gutter:stable;}
+        .time-col{background:#fbfdff;}
+        .time-slot{border-bottom:1px solid #edf2f7;color:#8a97aa;font-size:10px;}
+        .day-col{background:linear-gradient(to bottom,#fff 0,#fff 59px,#edf2f7 60px);background-size:100% 60px;cursor:crosshair;}
+        .day-col:hover{background:linear-gradient(to bottom,#fbfdff 0,#fbfdff 59px,#e8eef8 60px);background-size:100% 60px;}
+        .hour-line{border-bottom:1px solid #edf2f7;}
+        .half-line{background:rgba(148,163,184,.22);}
+        .calendar-event{left:7px;right:7px;border:1px solid rgba(37,99,235,.24);border-left-width:5px;border-radius:10px;padding:6px 8px;box-shadow:0 2px 8px rgba(37,99,235,.10),0 1px 2px rgba(15,23,42,.08);transition:box-shadow .14s ease,transform .14s ease,filter .14s ease;}
+        .calendar-event:hover{transform:translateY(-1px);filter:saturate(1.04);box-shadow:0 10px 24px rgba(15,23,42,.16);}
+        .calendar-event.selected{outline:2px solid #0f172a;outline-offset:2px;}
+        .calendar-event.dragging{opacity:.9;box-shadow:0 18px 42px rgba(15,23,42,.22);}
+        .calendar-event.pending::after{content:'local';position:absolute;top:5px;right:6px;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;background:rgba(15,23,42,.10);border-radius:999px;padding:2px 5px;}
+        .resize-handle{height:9px;opacity:0;transition:opacity .12s ease;}
+        .calendar-event:hover .resize-handle,.calendar-event.selected .resize-handle{opacity:1;}
+        .resize-handle.top::before,.resize-handle.bottom::before{content:'';position:absolute;left:35%;right:35%;height:3px;border-radius:999px;background:currentColor;opacity:.38;}
+        .resize-handle.top::before{top:2px}.resize-handle.bottom::before{bottom:2px}
+        .selection-block{border:2px solid var(--accent);background:rgba(37,99,235,.10);box-shadow:inset 0 0 0 1px rgba(255,255,255,.65);}
+        .group-tabs,.subgroup-tabs,.view-switcher{background:#eef3fb;border-color:#d8e2f0;box-shadow:inset 0 1px 2px rgba(15,23,42,.04);}
+        .group-tab,.subgroup-tab,.view-btn{position:relative;z-index:2;pointer-events:auto;}
+        .group-tab:hover,.subgroup-tab:hover,.view-btn:hover{color:var(--accent);background:rgba(255,255,255,.58);}
+        .group-tab.active,.subgroup-tab.active,.view-btn.active{background:#fff;color:var(--accent);box-shadow:0 2px 8px rgba(15,23,42,.10);}
+        .calendar-help{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--border);background:#fbfdff;color:var(--text-2);font-size:12px;}
+        .kbd{font-family:'DM Mono',monospace;font-size:11px;padding:2px 6px;border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:6px;background:#fff;color:#334155;}
+        .now-line{position:absolute;left:0;right:0;height:2px;background:#ef4444;z-index:4;pointer-events:none;box-shadow:0 0 0 1px rgba(239,68,68,.08);}
+        .now-line::before{content:'';position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#ef4444;}
+        .duration-live{margin-top:6px;color:var(--text-2);font-size:12px;}
+        .combo-box{min-height:42px;align-items:center;}
+        #teacher-chips{display:flex;flex-wrap:wrap;gap:6px;}
+        .combo-chip{background:#eaf2ff;border:1px solid #bfdbfe;color:#1d4ed8;}
+        .combo-chip button{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(37,99,235,.10);line-height:1;}
+        .combo-chip button:hover{background:#2563eb;color:#fff;}
+        .modal.event{right:22px;top:82px;border-radius:22px;box-shadow:0 28px 80px rgba(15,23,42,.24);}
+        .modal-actions{background:linear-gradient(180deg,#fbfdff,#f6f8fc);}
+        .month-cell{background:#fff;transition:background .12s ease;}
+        .month-cell:hover{background:#f8fbff;}
+        .btn[title]{position:relative;}
     </style>
 </head>
 <body>
@@ -88,8 +143,8 @@
             <div class="toolbar-left">
                 <div id="subgroup-area"><div class="subgroup-tabs" id="subgroup-tabs"></div></div>
                 <div class="group-tabs">
-                    <button id="promo-p1" class="group-tab active" onclick="switchGroup('p1')">Promo P1</button>
-                    <button id="promo-p2" class="group-tab" onclick="switchGroup('p2')">Promo P2</button>
+                    <button type="button" id="promo-p1" class="group-tab active" onclick="switchGroup('p1')">Promo P1</button>
+                    <button type="button" id="promo-p2" class="group-tab" onclick="switchGroup('p2')">Promo P2</button>
                 </div>
             </div>
             <div class="toolbar-left">
@@ -107,6 +162,13 @@
                 <button class="btn btn-primary btn-sm" onclick="openNewEventFromNow()"><i class="bi bi-plus-lg"></i> Nouvelle séance</button>
                 <button class="btn btn-sm" onclick="pasteOnCurrentDate()"><i class="bi bi-clipboard-plus"></i> Coller</button>
             </div>
+        </div>
+
+        <div class="calendar-help">
+            <span><strong>Astuce :</strong> cliquez une séance pour la modifier, glissez-la pour la déplacer, tirez le haut/bas pour ajuster la durée.</span>
+            <span><span class="kbd">Ctrl/Cmd</span> + <span class="kbd">C</span> copier</span>
+            <span><span class="kbd">Ctrl/Cmd</span> + <span class="kbd">V</span> coller</span>
+            <span><span class="kbd">Suppr.</span> supprimer</span>
         </div>
         <div id="calendar-wrap" class="calendar-wrap"></div>
     </section>
@@ -134,12 +196,12 @@
         <div id="event-progress-hint" class="progress-inline"></div>
         <div class="inline">
             <div class="field"><label>Groupe</label><select id="event-group" onchange="renderEventProgressHint()"></select></div>
-            <div class="field"><label>Durée rapide</label><select id="duration-preset" onchange="applyDurationPreset()"><option value="1">1 h</option><option value="1.5">1 h 30</option><option value="2" selected>2 h</option><option value="3">3 h</option><option value="4">4 h</option></select></div>
+            <div class="field"><label>Durée</label><select id="duration-preset" onchange="applyDurationPreset()"><option value="custom">Personnalisée</option><option value="1">1 h</option><option value="1.5">1 h 30</option><option value="2" selected>2 h</option><option value="3">3 h</option><option value="4">4 h</option></select><div id="duration-live" class="duration-live">Durée actuelle : 2 h</div></div>
         </div>
-        <div class="field"><label>Date</label><input id="event-date" type="date" onchange="renderEventProgressHint()"></div>
+        <div class="field"><label>Date</label><input id="event-date" type="date" onchange="handleDateChange()"></div>
         <div class="inline">
-            <div class="field"><label>Début</label><input id="event-start" type="time" step="900" onchange="renderEventProgressHint()"></div>
-            <div class="field"><label>Fin</label><input id="event-end" type="time" step="900" onchange="renderEventProgressHint()"></div>
+            <div class="field"><label>Début</label><input id="event-start" type="time" step="900" onchange="handleStartTimeChange()"></div>
+            <div class="field"><label>Fin</label><input id="event-end" type="time" step="900" onchange="handleEndTimeChange()"></div>
         </div>
         <div class="field"><label>Enseignant(s)</label><div id="event-teachers" class="combo-box"><div id="teacher-chips"></div><input id="teacher-search" list="teachers-list" placeholder="Écrire pour chercher un enseignant…" onkeydown="teacherSearchKey(event)" onchange="addTeacherFromInput()"></div><div class="hint">Tapez quelques lettres, choisissez un enseignant existant, puis Entrée. Seuls les enseignants sélectionnés apparaissent.</div></div>
         <div class="field"><label>Salle</label><input id="event-room" list="rooms-list" placeholder="Ex: O001 Acapulco"></div>
@@ -147,7 +209,7 @@
     </div>
     <div class="modal-actions">
         <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" onclick="saveEventFromModal()"><i class="bi bi-check-lg"></i> Valider localement</button><button id="delete-event-btn" class="btn btn-danger" onclick="deleteCurrentEvent()"><i class="bi bi-trash"></i> Supprimer</button></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn" onclick="copyEventFromModal()"><i class="bi bi-copy"></i> Copier</button><button class="btn" onclick="duplicateNextWeek()"><i class="bi bi-calendar-plus"></i> +1 semaine</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn" onclick="copyEventFromModal()"><i class="bi bi-copy"></i> Copier</button><button class="btn" title="Créer une copie de cette séance exactement une semaine plus tard" onclick="duplicateNextWeek()"><i class="bi bi-calendar-plus"></i> Dupliquer semaine suivante</button></div>
     </div>
 </div>
 
@@ -188,6 +250,7 @@ let lastSlot = null;
 let dirtyEvents = false;
 let dragState = null;
 let selectionState = null;
+let lastKnownDurationMinutes = 120;
 
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function jsArg(s){return JSON.stringify(String(s??''));}
@@ -247,7 +310,7 @@ function renderAll(){renderDatalists();renderSubgroupTabs();renderCalendar();ren
 function switchSide(name){document.querySelectorAll('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.side===name));document.querySelectorAll('.side-section').forEach(s=>s.classList.toggle('active',s.id==='side-'+name));}
 function switchGroup(promo){currentPromo=promo;document.getElementById('promo-p1').classList.toggle('active',promo==='p1');document.getElementById('promo-p2').classList.toggle('active',promo==='p2');currentSubgroup='all';selectedEventId=null;renderSubgroupTabs();renderCalendar();renderProgress();}
 function getSubgroups(promo){const s=new Set();for(const ev of eventList(promo))for(const g of (ev.groups||[]))if(g)s.add(g);s.add('G 1');s.add('G 2');return Array.from(s).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));}
-function renderSubgroupTabs(){const subgroups=getSubgroups(currentPromo);const area=document.getElementById('subgroup-area');const tabs=document.getElementById('subgroup-tabs');area.style.display='block';let html=`<button class="subgroup-tab${currentSubgroup==='all'?' active':''}" onclick="switchSubgroup('all')">Tous</button>`;for(const sg of subgroups){html+=`<button class="subgroup-tab${currentSubgroup===sg?' active':''}" onclick="switchSubgroup(${jsArg(sg)})">${esc(sg)}</button>`;}tabs.innerHTML=html;}
+function renderSubgroupTabs(){const subgroups=getSubgroups(currentPromo);const area=document.getElementById('subgroup-area');const tabs=document.getElementById('subgroup-tabs');area.style.display='block';let html=`<button type="button" class="subgroup-tab${currentSubgroup==='all'?' active':''}" data-subgroup="all">Tous</button>`;for(const sg of subgroups){html+=`<button type="button" class="subgroup-tab${currentSubgroup===sg?' active':''}" data-subgroup="${esc(sg)}">${esc(sg)}</button>`;}tabs.innerHTML=html;}
 function switchSubgroup(sg){currentSubgroup=sg;selectedEventId=null;renderSubgroupTabs();renderCalendar();renderProgress();}
 function groupLabel(g){return g==='all'?'Tous':(g==='promo'?'Promo entière':g);}
 function eventMatchesDisplay(ev){const groups=ev.groups||[];if(currentSubgroup==='all')return true;if(groups.length===0)return true;return groups.includes(currentSubgroup);}
@@ -267,6 +330,7 @@ function renderDatalists(){
 function renderCalendar(){if(currentView==='day')renderDayView();else if(currentView==='month')renderMonthView();else renderWeekView();}
 function renderTimeCol(){let html='';for(let h=DAY_START_HOUR;h<DAY_END_HOUR;h++)html+=`<div class="time-slot">${pad(h)}:00</div>`;return html;}
 function renderHourLines(){let rows='';for(let h=DAY_START_HOUR;h<DAY_END_HOUR;h++)rows+='<div class="hour-line"></div>';for(let h=DAY_START_HOUR;h<DAY_END_HOUR;h++)rows+=`<div class="half-line" style="top:${(h-DAY_START_HOUR)*60+30}px"></div>`;return rows;}
+function renderNowLine(dateKey){const now=new Date();if(dateKey!==isoDate(now))return '';const mins=minutesFromDayStart(now);if(mins<0||mins>(DAY_END_HOUR-DAY_START_HOUR)*60)return '';return `<div class="now-line" style="top:${mins}px"></div>`;}
 function renderWeekView(){
     const wrap=document.getElementById('calendar-wrap');const weekStart=startOfWeek(currentDate);const weekEnd=addDays(weekStart,4);
     document.getElementById('current-period').textContent=`${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]} — ${weekEnd.getDate()} ${MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
@@ -286,14 +350,14 @@ function renderDayColumn(d,single=false){
     const dateKey=isoDate(d);const evs=eventList(currentPromo).filter(ev=>ev.start&&isoDate(parseLocal(ev.start))===dateKey&&eventMatchesDisplay(ev));
     evs.sort((a,b)=>String(a.start).localeCompare(String(b.start))||String(a.end).localeCompare(String(b.end)));
     const cards=evs.map(ev=>renderEventCard(ev)).join('');
-    return `<div class="day-col" data-date="${dateKey}" onmousedown="dayPointerDown(event, '${dateKey}')">${renderHourLines()}${cards}</div>`;
+    return `<div class="day-col" data-date="${dateKey}" onmousedown="dayPointerDown(event, '${dateKey}')">${renderHourLines()}${renderNowLine(dateKey)}${cards}</div>`;
 }
 function renderEventCard(ev){
     const st=parseLocal(ev.start),en=parseLocal(ev.end);if(!st||!en)return '';
     const top=Math.max(0,minutesFromDayStart(st)*PX_PER_MIN);const height=Math.max(26,(en-st)/60000*PX_PER_MIN-2);
     const groups=(ev.groups||[]).length?(ev.groups||[]).map(g=>`<span class="group-badge">${esc(g)}</span>`).join(''):'<span class="group-badge">Promo</span>';
     const teachers=(ev.teachers||[]).join(' · ');const selected=selectedEventId===ev.id?' selected':'';const pending=ev._pending?' pending':'';
-    return `<div class="calendar-event${selected}${pending}" data-event-id="${esc(ev.id)}" style="top:${top}px;height:${height}px;${eventStyle(ev)}" onclick="eventCardClick(event, ${jsArg(ev.id)})" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'move')" ondblclick="eventCardDblClick(event, ${jsArg(ev.id)})">
+    return `<div class="calendar-event${selected}${pending}" data-event-id="${esc(ev.id)}" role="button" tabindex="0" title="Cliquer pour modifier · glisser pour déplacer · tirer les bords pour ajuster" style="top:${top}px;height:${height}px;${eventStyle(ev)}" onclick="eventCardClick(event, ${jsArg(ev.id)})" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'move')" ondblclick="eventCardDblClick(event, ${jsArg(ev.id)})">
         <div class="resize-handle top" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'resize-top')"></div><div class="resize-handle bottom" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'resize-bottom')"></div>
         <div class="ev-time">${timeStr(st)}–${timeStr(en)}${ev._pending?'<span class="pending-label">non enregistré</span>':''}</div><div class="ev-title">${esc(ev.summary)}</div><div class="ev-sub">${groups}${esc(teachers)}</div>${ev.room?`<div class="ev-room"><i class="bi bi-geo-alt"></i> ${esc(ev.room)}</div>`:''}</div>`;
 }
@@ -359,7 +423,7 @@ function updateOpenModalTimes(ev){
     const modal=document.getElementById('event-modal');
     if(!modal||modal.style.display!=='block'||document.getElementById('event-id').value!==ev.id)return;
     const st=parseLocal(ev.start),en=parseLocal(ev.end);if(!st||!en)return;
-    document.getElementById('event-date').value=isoDate(st);document.getElementById('event-start').value=timeStr(st);document.getElementById('event-end').value=timeStr(en);renderEventProgressHint();
+    document.getElementById('event-date').value=isoDate(st);document.getElementById('event-start').value=timeStr(st);document.getElementById('event-end').value=timeStr(en);updateDurationUI();renderEventProgressHint();
 }
 function eventCardClick(e,id){e.stopPropagation();selectedEventId=id;const ev=findEventById(id);if(ev)openEditEvent(ev);renderCalendar();}
 function eventCardDblClick(e,id){eventCardClick(e,id);}
@@ -375,14 +439,14 @@ function openEventModal(){openOverlay();document.getElementById('event-modal').s
 function openMaquetteModal(){renderMaquetteTable();openOverlay();document.getElementById('maquette-modal').style.display='block';}
 function openTeachersModal(){renderTeachersTable();openOverlay();document.getElementById('teachers-modal').style.display='block';}
 
-function openNewEvent(start,end){selectedEventId=null;document.getElementById('modal-title').textContent='Nouvelle séance';document.getElementById('delete-event-btn').style.display='none';document.getElementById('event-id').value='';document.getElementById('event-current-promo-label').textContent=currentPromo.toUpperCase();syncEventGroups();document.getElementById('event-group').value=currentSubgroup==='all'?'promo':currentSubgroup;document.getElementById('event-summary').value='';document.getElementById('event-date').value=isoDate(start);document.getElementById('event-start').value=timeStr(start);document.getElementById('event-end').value=timeStr(end);document.getElementById('event-room').value='';document.getElementById('event-description').value='';renderTeacherSelect([]);renderCopiedHelp();renderEventProgressHint();openEventModal();}
+function openNewEvent(start,end){selectedEventId=null;document.getElementById('modal-title').textContent='Nouvelle séance';document.getElementById('delete-event-btn').style.display='none';document.getElementById('event-id').value='';document.getElementById('event-current-promo-label').textContent=currentPromo.toUpperCase();syncEventGroups();document.getElementById('event-group').value=currentSubgroup==='all'?'promo':currentSubgroup;document.getElementById('event-summary').value='';document.getElementById('event-date').value=isoDate(start);document.getElementById('event-start').value=timeStr(start);document.getElementById('event-end').value=timeStr(end);document.getElementById('event-room').value='';document.getElementById('event-description').value='';renderTeacherSelect([]);renderCopiedHelp();updateDurationUI();renderEventProgressHint();openEventModal();}
 function openNewEventFromNow(){let start=roundDateToMinutes(new Date(),30);if(start.getHours()<DAY_START_HOUR||start.getHours()>=DAY_END_HOUR)start.setHours(8,30,0,0);currentDate=start;openNewEvent(start,addMinutes(start,120));renderCalendar();}
-function openEditEvent(ev){const promo=findEventPromo(ev.id);currentPromo=promo;document.getElementById('promo-p1').classList.toggle('active',promo==='p1');document.getElementById('promo-p2').classList.toggle('active',promo==='p2');renderSubgroupTabs();const st=parseLocal(ev.start),en=parseLocal(ev.end);document.getElementById('modal-title').textContent='Modifier la séance';document.getElementById('delete-event-btn').style.display='inline-flex';document.getElementById('event-id').value=ev.id;document.getElementById('event-current-promo-label').textContent=promo.toUpperCase();syncEventGroups();document.getElementById('event-group').value=(ev.groups&&ev.groups[0])?ev.groups[0]:'promo';document.getElementById('event-summary').value=ev.summary||'';document.getElementById('event-date').value=st?isoDate(st):'';document.getElementById('event-start').value=st?timeStr(st):'08:30';document.getElementById('event-end').value=en?timeStr(en):'10:30';document.getElementById('event-room').value=ev.room||'';document.getElementById('event-description').value=ev.description||'';renderTeacherSelect(ev.teachers||[]);renderCopiedHelp();renderEventProgressHint();openEventModal();}
+function openEditEvent(ev){const promo=findEventPromo(ev.id);currentPromo=promo;document.getElementById('promo-p1').classList.toggle('active',promo==='p1');document.getElementById('promo-p2').classList.toggle('active',promo==='p2');renderSubgroupTabs();const st=parseLocal(ev.start),en=parseLocal(ev.end);if(st)currentDate=st;document.getElementById('modal-title').textContent='Modifier la séance';document.getElementById('delete-event-btn').style.display='inline-flex';document.getElementById('event-id').value=ev.id;document.getElementById('event-current-promo-label').textContent=promo.toUpperCase();syncEventGroups();document.getElementById('event-group').value=(ev.groups&&ev.groups[0])?ev.groups[0]:'promo';document.getElementById('event-summary').value=ev.summary||'';document.getElementById('event-date').value=st?isoDate(st):'';document.getElementById('event-start').value=st?timeStr(st):'08:30';document.getElementById('event-end').value=en?timeStr(en):'10:30';document.getElementById('event-room').value=ev.room||'';document.getElementById('event-description').value=ev.description||'';renderTeacherSelect(ev.teachers||[]);renderCopiedHelp();updateDurationUI();renderEventProgressHint();openEventModal();}
 function syncEventGroups(){const sel=document.getElementById('event-group');const old=sel.value||'promo';const groups=['promo',...getSubgroups(currentPromo)];sel.innerHTML=groups.map(g=>`<option value="${esc(g)}">${esc(groupLabel(g))}</option>`).join('');sel.value=groups.includes(old)?old:'promo';}
 function renderTeacherSelect(selected=[]){
     const wrap=document.getElementById('teacher-chips');if(!wrap)return;
     const unique=Array.from(new Set((selected||[]).filter(Boolean)));
-    wrap.innerHTML=unique.map(n=>`<span class="combo-chip" data-teacher="${esc(n)}">${esc(n)} <button type="button" onclick="removeTeacherChip(${jsArg(n)})">×</button></span>`).join('');
+    wrap.innerHTML=unique.map(n=>`<span class="combo-chip" data-teacher="${esc(n)}">${esc(n)} <button type="button" aria-label="Retirer ${esc(n)}" data-remove-teacher="${esc(n)}">×</button></span>`).join('');
     const input=document.getElementById('teacher-search');if(input)input.value='';
 }
 function selectedTeachers(){return Array.from(document.querySelectorAll('#teacher-chips .combo-chip')).map(x=>x.dataset.teacher).filter(Boolean);}
@@ -394,21 +458,27 @@ function addTeacherFromInput(){
     renderTeacherSelect([...selectedTeachers(),found]);renderEventProgressHint();input.focus();
 }
 function teacherSearchKey(e){if(e.key==='Enter'||e.key===','||e.key==='Tab'){e.preventDefault();addTeacherFromInput();}}
-function removeTeacherChip(name){renderTeacherSelect(selectedTeachers().filter(t=>t!==name));renderEventProgressHint();}
+function removeTeacherChip(name,e){if(e){e.preventDefault();e.stopPropagation();}renderTeacherSelect(selectedTeachers().filter(t=>t!==name));renderEventProgressHint();}
 
 function defaultTeachersForSubject(subject){const m=(DATA.maquette_data||[]).find(x=>normalizeText(x.subject)===normalizeText(subject));const allowed=new Set(teacherNames());return (m?.teachers||[]).filter(t=>allowed.has(t));}
 function applySubjectDefaults(){const subject=document.getElementById('event-summary').value.trim();const current=selectedTeachers();if(current.length)return;const defaults=defaultTeachersForSubject(subject);if(defaults.length)renderTeacherSelect(defaults);}
-function applyDurationPreset(){const date=document.getElementById('event-date').value, start=document.getElementById('event-start').value, hours=parseFloat(document.getElementById('duration-preset').value||'2');if(!date||!start)return;const st=new Date(`${date}T${start}:00`),en=addMinutes(st,Math.round(hours*60));document.getElementById('event-end').value=timeStr(en);renderEventProgressHint();}
+function formatDuration(mins){mins=Math.max(0,Math.round(mins));const h=Math.floor(mins/60),m=mins%60;return `${h?h+' h':''}${m?`${h?' ':''}${m}`:''}`||'0 min';}
+function formDurationMinutes(){const date=document.getElementById('event-date').value,st=document.getElementById('event-start').value,en=document.getElementById('event-end').value;if(!date||!st||!en)return null;const a=new Date(`${date}T${st}:00`),b=new Date(`${date}T${en}:00`);const mins=(b-a)/60000;return Number.isFinite(mins)&&mins>0?mins:null;}
+function updateDurationUI(){const mins=formDurationMinutes();const preset=document.getElementById('duration-preset');const live=document.getElementById('duration-live');if(!preset||!live)return;if(mins){lastKnownDurationMinutes=mins;const match={60:'1',90:'1.5',120:'2',180:'3',240:'4'}[String(Math.round(mins))];preset.value=match||'custom';live.innerHTML=`Durée actuelle : <strong>${formatDuration(mins)}</strong>`;}else{live.textContent='Durée actuelle : —';}}
+function applyDurationPreset(){const date=document.getElementById('event-date').value, start=document.getElementById('event-start').value, value=document.getElementById('duration-preset').value;if(value==='custom'){updateDurationUI();renderEventProgressHint();return;}const hours=parseFloat(value||'2');if(!date||!start||!Number.isFinite(hours))return;const st=new Date(`${date}T${start}:00`),en=addMinutes(st,Math.round(hours*60));document.getElementById('event-end').value=timeStr(en);lastKnownDurationMinutes=Math.round(hours*60);updateDurationUI();renderEventProgressHint();}
+function handleStartTimeChange(){const date=document.getElementById('event-date').value,start=document.getElementById('event-start').value;if(!date||!start){renderEventProgressHint();return;}const selected=document.getElementById('duration-preset').value;const presetM=selected&&selected!=='custom'?Math.round(parseFloat(selected)*60):null;const duration=presetM||lastKnownDurationMinutes||formDurationMinutes()||120;const st=new Date(`${date}T${start}:00`),en=addMinutes(st,duration);document.getElementById('event-end').value=timeStr(en);updateDurationUI();renderEventProgressHint();}
+function handleEndTimeChange(){updateDurationUI();renderEventProgressHint();}
+function handleDateChange(){updateDurationUI();renderEventProgressHint();}
 function formToEvent(){const id=document.getElementById('event-id').value||makeId();const summary=document.getElementById('event-summary').value.trim();const date=document.getElementById('event-date').value;const st=document.getElementById('event-start').value;const en=document.getElementById('event-end').value;const group=document.getElementById('event-group').value;return {id,summary,start:`${date}T${st}:00`,end:`${date}T${en}:00`,groups:group&&group!=='promo'?[group]:[],teachers:selectedTeachers(),room:document.getElementById('event-room').value.trim(),description:document.getElementById('event-description').value.trim(),_pending:true};}
 function validateEvent(ev){if(!ev.summary)return 'La matière est obligatoire.';const st=parseLocal(ev.start),en=parseLocal(ev.end);if(!st||!en||en<=st)return 'Les horaires sont invalides.';return null;}
 function saveEventFromModal(){const ev=formToEvent();const err=validateEvent(ev);if(err){showToast(err);return;}const oldPromo=document.getElementById('event-id').value?findEventPromo(ev.id):currentPromo;setEventList(oldPromo,eventList(oldPromo).filter(e=>e.id!==ev.id));setEventList(currentPromo,[...eventList(currentPromo).filter(e=>e.id!==ev.id),ev]);selectedEventId=ev.id;currentDate=parseLocal(ev.start);markEventsDirty();renderAll();renderDatalists();closeEventModal();}
 function deleteCurrentEvent(){const id=document.getElementById('event-id').value;if(!id)return;if(!confirm('Supprimer cette séance ?'))return;DATA.events_p1=DATA.events_p1.filter(e=>e.id!==id);DATA.events_p2=DATA.events_p2.filter(e=>e.id!==id);selectedEventId=null;markEventsDirty();renderAll();closeEventModal();}
 function copyEventFromModal(){const ev=formToEvent();const err=validateEvent(ev);if(err){showToast(err);return;}copiedEvent={...ev,promo:currentPromo};renderCopiedHelp();showToast('Séance copiée. Sélectionnez un créneau ou utilisez Coller.');}
-function renderCopiedHelp(){const box=document.getElementById('copied-help');if(!copiedEvent){box.style.display='none';return;}box.style.display='block';box.innerHTML=`<div><strong>Séance copiée :</strong> ${esc(copiedEvent.summary)}</div><div class="hint">Elle sera collée sur la date et l’heure affichées dans cette fenêtre.</div><button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="pasteCopiedIntoModal()"><i class="bi bi-clipboard-plus"></i> Coller ici</button>`;}
-function pasteCopiedIntoModal(){if(!copiedEvent)return;const date=document.getElementById('event-date').value,start=document.getElementById('event-start').value;if(!date||!start)return;const oldStart=parseLocal(copiedEvent.start),oldEnd=parseLocal(copiedEvent.end);const mins=oldStart&&oldEnd?(oldEnd-oldStart)/60000:120;const st=new Date(`${date}T${start}:00`),en=addMinutes(st,mins);document.getElementById('event-id').value='';document.getElementById('event-summary').value=copiedEvent.summary||'';document.getElementById('event-end').value=timeStr(en);document.getElementById('event-group').value=(copiedEvent.groups&&copiedEvent.groups[0])||'promo';renderTeacherSelect(copiedEvent.teachers||[]);document.getElementById('event-room').value=copiedEvent.room||'';document.getElementById('event-description').value=copiedEvent.description||'';renderEventProgressHint();}
+function renderCopiedHelp(){const box=document.getElementById('copied-help');if(!copiedEvent){box.style.display='none';return;}box.style.display='block';box.innerHTML=`<div><strong>Séance copiée :</strong> ${esc(copiedEvent.summary)}</div><div class="hint">Elle sera collée sur le créneau sélectionné ou sur la date et l’heure affichées dans cette fenêtre.</div><button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="pasteCopiedIntoModal()"><i class="bi bi-clipboard-plus"></i> Coller ici</button>`;}
+function pasteCopiedIntoModal(){if(!copiedEvent)return;const date=document.getElementById('event-date').value,start=document.getElementById('event-start').value;if(!date||!start)return;const oldStart=parseLocal(copiedEvent.start),oldEnd=parseLocal(copiedEvent.end);const mins=oldStart&&oldEnd?(oldEnd-oldStart)/60000:120;const st=new Date(`${date}T${start}:00`),en=addMinutes(st,mins);document.getElementById('event-id').value='';document.getElementById('event-summary').value=copiedEvent.summary||'';document.getElementById('event-end').value=timeStr(en);document.getElementById('event-group').value=(copiedEvent.groups&&copiedEvent.groups[0])||'promo';renderTeacherSelect(copiedEvent.teachers||[]);document.getElementById('event-room').value=copiedEvent.room||'';document.getElementById('event-description').value=copiedEvent.description||'';updateDurationUI();renderEventProgressHint();}
 function pasteOnCurrentDate(){if(!copiedEvent){showToast('Aucune séance copiée.');return;}const base=lastSlot?new Date(`${lastSlot.date}T${lastSlot.start}:00`):new Date(currentDate.getFullYear(),currentDate.getMonth(),currentDate.getDate(),8,30);openNewEvent(base,addMinutes(base,120));pasteCopiedIntoModal();}
 function duplicateNextWeek(){const ev=formToEvent();const err=validateEvent(ev);if(err){showToast(err);return;}const st=addDays(parseLocal(ev.start),7),en=addDays(parseLocal(ev.end),7);ev.id=makeId();ev.start=`${isoDate(st)}T${timeStr(st)}:00`;ev.end=`${isoDate(en)}T${timeStr(en)}:00`;ev._pending=true;setEventList(currentPromo,[...eventList(currentPromo),ev]);selectedEventId=ev.id;currentDate=st;markEventsDirty();renderAll();closeEventModal();}
-window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&selectedEventId){const ev=findEventById(selectedEventId);if(ev){copiedEvent={...ev,promo:findEventPromo(ev.id)};showToast('Séance copiée.');}}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&copiedEvent){e.preventDefault();pasteOnCurrentDate();}if(e.key==='Escape')closeAllModals();});
+window.addEventListener('keydown',e=>{const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&selectedEventId){const ev=findEventById(selectedEventId);if(ev){copiedEvent={...ev,promo:findEventPromo(ev.id)};renderCopiedHelp();showToast('Séance copiée.');}}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&copiedEvent){e.preventDefault();pasteOnCurrentDate();}if((e.key==='Backspace'||e.key==='Delete')&&selectedEventId&&!typing){const ev=findEventById(selectedEventId);if(ev&&confirm('Supprimer cette séance ?')){DATA.events_p1=DATA.events_p1.filter(x=>x.id!==selectedEventId);DATA.events_p2=DATA.events_p2.filter(x=>x.id!==selectedEventId);selectedEventId=null;markEventsDirty();renderAll();}}if(e.key==='Escape')closeAllModals();});
 
 function targetForSubject(subject){const m=(DATA.maquette_data||[]).find(x=>normalizeText(x.subject)===normalizeText(subject));return Number(m?.total||0);}
 function hoursBySubject(promo=currentPromo,group=currentSubgroup,extraEvent=null,excludeId=null){
@@ -447,6 +517,18 @@ function editTeacher(i,field,value){DATA.teachers_data[i][field]=field==='hourly
 function newTeacherRow(){DATA.teachers_data.push({name:'',organism:'',hourly_rate:0,region:''});renderTeachersTable();renderDatalists();}
 function removeTeacherRow(i){if(!confirm('Supprimer cet enseignant ?'))return;DATA.teachers_data.splice(i,1);renderTeachersTable();renderDatalists();renderTeacherSelect(selectedTeachers().filter(t=>teacherNames().includes(t)));}
 async function saveTeachers(){try{const res=await fetch(`/api/planner-save/${encodeURIComponent(SLUG)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teachers_data:DATA.teachers_data})});if(!res.ok)throw new Error(await res.text());showToast('Enseignants enregistrés.');}catch(e){showToast('Erreur pendant l’enregistrement des enseignants.');}}
+
+
+document.addEventListener('click',e=>{
+    const teacherBtn=e.target.closest('[data-remove-teacher]');
+    if(teacherBtn){removeTeacherChip(teacherBtn.dataset.removeTeacher,e);return;}
+    const subgroupBtn=e.target.closest('[data-subgroup]');
+    if(subgroupBtn){e.preventDefault();switchSubgroup(subgroupBtn.dataset.subgroup);return;}
+});
+document.addEventListener('keydown',e=>{
+    const card=e.target.closest?.('.calendar-event');
+    if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();eventCardClick(e,card.dataset.eventId);}
+});
 
 init();
 </script>
