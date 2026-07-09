@@ -72,8 +72,6 @@
         .group-tab,.subgroup-tab,.view-btn{position:relative;z-index:2;pointer-events:auto;}
         .group-tab:hover,.subgroup-tab:hover,.view-btn:hover{color:var(--accent);background:rgba(255,255,255,.58);}
         .group-tab.active,.subgroup-tab.active,.view-btn.active{background:#fff;color:var(--accent);box-shadow:0 2px 8px rgba(15,23,42,.10);}
-        .calendar-help{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--border);background:#fbfdff;color:var(--text-2);font-size:12px;}
-        .kbd{font-family:'DM Mono',monospace;font-size:11px;padding:2px 6px;border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:6px;background:#fff;color:#334155;}
         .now-line{position:absolute;left:0;right:0;height:2px;background:#ef4444;z-index:4;pointer-events:none;box-shadow:0 0 0 1px rgba(239,68,68,.08);}
         .now-line::before{content:'';position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#ef4444;}
         .duration-live{margin-top:6px;color:var(--text-2);font-size:12px;}
@@ -164,12 +162,6 @@
             </div>
         </div>
 
-        <div class="calendar-help">
-            <span><strong>Astuce :</strong> cliquez une séance pour la modifier, glissez-la pour la déplacer, tirez le haut/bas pour ajuster la durée.</span>
-            <span><span class="kbd">Ctrl/Cmd</span> + <span class="kbd">C</span> copier</span>
-            <span><span class="kbd">Ctrl/Cmd</span> + <span class="kbd">V</span> coller</span>
-            <span><span class="kbd">Suppr.</span> supprimer</span>
-        </div>
         <div id="calendar-wrap" class="calendar-wrap"></div>
     </section>
 </main>
@@ -253,7 +245,13 @@ let selectionState = null;
 let lastKnownDurationMinutes = 120;
 
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function jsArg(s){return JSON.stringify(String(s??''));}
+function jsArg(s){
+    return JSON.stringify(String(s??''))
+        .replace(/</g,'\\u003C')
+        .replace(/>/g,'\\u003E')
+        .replace(/&/g,'&amp;')
+        .replace(/"/g,'&quot;');
+}
 function pad(n){return String(n).padStart(2,'0');}
 function isoDate(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
 function timeStr(d){return `${pad(d.getHours())}:${pad(d.getMinutes())}`;}
@@ -357,15 +355,15 @@ function renderEventCard(ev){
     const top=Math.max(0,minutesFromDayStart(st)*PX_PER_MIN);const height=Math.max(26,(en-st)/60000*PX_PER_MIN-2);
     const groups=(ev.groups||[]).length?(ev.groups||[]).map(g=>`<span class="group-badge">${esc(g)}</span>`).join(''):'<span class="group-badge">Promo</span>';
     const teachers=(ev.teachers||[]).join(' · ');const selected=selectedEventId===ev.id?' selected':'';const pending=ev._pending?' pending':'';
-    return `<div class="calendar-event${selected}${pending}" data-event-id="${esc(ev.id)}" role="button" tabindex="0" title="Cliquer pour modifier · glisser pour déplacer · tirer les bords pour ajuster" style="top:${top}px;height:${height}px;${eventStyle(ev)}" onclick="eventCardClick(event, ${jsArg(ev.id)})" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'move')" ondblclick="eventCardDblClick(event, ${jsArg(ev.id)})">
-        <div class="resize-handle top" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'resize-top')"></div><div class="resize-handle bottom" onmousedown="eventMouseDown(event, ${jsArg(ev.id)}, 'resize-bottom')"></div>
+    return `<div class="calendar-event${selected}${pending}" data-event-id="${esc(ev.id)}" role="button" tabindex="0" title="Modifier la séance" style="top:${top}px;height:${height}px;${eventStyle(ev)}">
+        <div class="resize-handle top" data-resize-mode="resize-top" aria-hidden="true"></div><div class="resize-handle bottom" data-resize-mode="resize-bottom" aria-hidden="true"></div>
         <div class="ev-time">${timeStr(st)}–${timeStr(en)}${ev._pending?'<span class="pending-label">non enregistré</span>':''}</div><div class="ev-title">${esc(ev.summary)}</div><div class="ev-sub">${groups}${esc(teachers)}</div>${ev.room?`<div class="ev-room"><i class="bi bi-geo-alt"></i> ${esc(ev.room)}</div>`:''}</div>`;
 }
 function renderMonthView(){
     const wrap=document.getElementById('calendar-wrap');const first=new Date(currentDate.getFullYear(),currentDate.getMonth(),1);const start=new Date(first);const day=first.getDay()||7;start.setDate(first.getDate()-day+1);
     document.getElementById('current-period').textContent=`${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
     const header=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=>`<div class="month-day-name">${d}</div>`).join('');let cells='';
-    for(let i=0;i<42;i++){const d=addDays(start,i);const dateKey=isoDate(d);const cls=(d.getMonth()!==currentDate.getMonth()?' other':'')+(dateKey===isoDate(new Date())?' today-cell':'');const evs=eventList(currentPromo).filter(ev=>ev.start&&isoDate(parseLocal(ev.start))===dateKey&&eventMatchesDisplay(ev)).slice(0,4);cells+=`<div class="month-cell${cls}" onclick="monthCellClick(event, '${dateKey}')"><div class="month-num">${d.getDate()}</div>${evs.map(ev=>`<div class="month-event${ev._pending?' pending':''}" style="${monthEventStyle(ev)}" onclick="eventCardClick(event, ${jsArg(ev.id)})">${esc(ev.summary||'Séance')}</div>`).join('')}${evs.length>=4?'<div class="hint">…</div>':''}</div>`;}
+    for(let i=0;i<42;i++){const d=addDays(start,i);const dateKey=isoDate(d);const cls=(d.getMonth()!==currentDate.getMonth()?' other':'')+(dateKey===isoDate(new Date())?' today-cell':'');const evs=eventList(currentPromo).filter(ev=>ev.start&&isoDate(parseLocal(ev.start))===dateKey&&eventMatchesDisplay(ev)).slice(0,4);cells+=`<div class="month-cell${cls}" onclick="monthCellClick(event, '${dateKey}')"><div class="month-num">${d.getDate()}</div>${evs.map(ev=>`<div class="month-event${ev._pending?' pending':''}" data-event-id="${esc(ev.id)}" role="button" tabindex="0" style="${monthEventStyle(ev)}">${esc(ev.summary||'Séance')}</div>`).join('')}${evs.length>=4?'<div class="hint">…</div>':''}</div>`;}
     wrap.innerHTML=`<div class="month-grid"><div class="month-header">${header}</div><div class="month-body">${cells}</div></div>`;
 }
 function monthCellClick(e,dateKey){if(e.target.closest('.month-event'))return;const st=new Date(`${dateKey}T08:30:00`);currentDate=st;openNewEvent(st,addMinutes(st,120));}
@@ -384,7 +382,7 @@ function dateToMins(d){return clamp(minutesFromDayStart(d),0,(DAY_END_HOUR-DAY_S
 function dateAtPointer(x){const cols=Array.from(document.querySelectorAll('.day-col'));for(const c of cols){const r=c.getBoundingClientRect();if(x>=r.left&&x<=r.right)return c.dataset.date;}return null;}
 
 function eventMouseDown(e,id,mode){
-    if(e.button!==0)return;
+    if(!id||e.button!==0)return;
     e.stopPropagation();
     e.preventDefault();
     const ev=findEventById(id);if(!ev)return;
@@ -496,7 +494,7 @@ function renderProgress(){const totals=hoursBySubject(currentPromo,currentSubgro
     for(const [subject,done] of Object.entries(totals)){if(!rows.some(r=>normalizeText(r.subject)===normalizeText(subject)))rows.push({subject,target:0,done,remaining:-done});}
     rows.sort((a,b)=>a.subject.localeCompare(b.subject,'fr'));const totalTarget=rows.reduce((s,r)=>s+(r.target||0),0),totalDone=rows.reduce((s,r)=>s+(r.done||0),0),delta=totalDone-totalTarget;
     document.getElementById('progress-summary').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;"><strong>${currentPromo.toUpperCase()} · ${esc(groupLabel(currentSubgroup))}</strong><span class="${delta>0?'warn':'ok'}">${delta>=0?'+':''}${delta.toFixed(2)} h</span></div><div class="hint">${totalDone.toFixed(2)} h positionnées / ${totalTarget.toFixed(2)} h maquette · ${Math.max(0,totalTarget-totalDone).toFixed(2)} h restantes</div>`;
-    document.getElementById('progress-list').innerHTML=rows.length?rows.map(r=>{const pct=r.target>0?Math.min(100,Math.round((r.done/r.target)*100)):(r.done>0?100:0);const cls=r.target>0&&r.done>r.target+.001?' over':(r.target>0&&Math.abs(r.done-r.target)<.001?' done':'');const note=r.target>0?(r.remaining<-.001?`Dépassement de ${Math.abs(r.remaining).toFixed(2)} h`:`${Math.max(0,r.remaining).toFixed(2)} h restantes`):`${r.done.toFixed(2)} h positionnées hors maquette`;return `<div class="progress-row${cls}" onclick="prefillSubject(${jsArg(r.subject)})"><div class="progress-top"><div class="progress-subject">${esc(r.subject)}</div><div class="progress-hours">${r.done.toFixed(2)} / ${r.target.toFixed(2)} h</div></div><div class="bar"><div style="width:${pct}%"></div></div><div class="mini-note">${esc(note)}</div></div>`;}).join(''):'<div class="hint">Aucune matière dans la maquette.</div>';
+    document.getElementById('progress-list').innerHTML=rows.length?rows.map(r=>{const pct=r.target>0?Math.min(100,Math.round((r.done/r.target)*100)):(r.done>0?100:0);const cls=r.target>0&&r.done>r.target+.001?' over':(r.target>0&&Math.abs(r.done-r.target)<.001?' done':'');const note=r.target>0?(r.remaining<-.001?`Dépassement de ${Math.abs(r.remaining).toFixed(2)} h`:`${Math.max(0,r.remaining).toFixed(2)} h restantes`):`${r.done.toFixed(2)} h positionnées hors maquette`;return `<div class="progress-row${cls}" data-subject="${esc(r.subject)}"><div class="progress-top"><div class="progress-subject">${esc(r.subject)}</div><div class="progress-hours">${r.done.toFixed(2)} / ${r.target.toFixed(2)} h</div></div><div class="bar"><div style="width:${pct}%"></div></div><div class="mini-note">${esc(note)}</div></div>`;}).join(''):'<div class="hint">Aucune matière dans la maquette.</div>';
 }
 function prefillSubject(subject){openNewEventFromNow();document.getElementById('event-summary').value=subject;const defaults=defaultTeachersForSubject(subject);if(defaults.length)renderTeacherSelect(defaults);renderEventProgressHint();}
 function renderEventProgressHint(){const subject=document.getElementById('event-summary').value.trim();const group=document.getElementById('event-group').value||'promo';const ev=formToEvent();const editedId=document.getElementById('event-id').value;const metricGroup=group==='promo'?'all':group;const totals=hoursBySubject(currentPromo,metricGroup,ev,editedId);const after=Object.entries(totals).filter(([s])=>normalizeText(s)===normalizeText(subject)).reduce((a,[,h])=>a+h,0);const target=targetForSubject(subject);const remaining=target-after;let msg='';if(!subject)msg='<span class="hint">Choisissez une matière pour voir les heures restantes.</span>';else if(!target)msg=`<strong>${esc(subject)}</strong><div class="hint">Pas de cible maquette connue. Après validation : ${after.toFixed(2)} h positionnées.</div>`;else if(remaining<-.001)msg=`<strong>${esc(subject)}</strong><div class="warn">Après validation : ${after.toFixed(2)} / ${target.toFixed(2)} h · dépassement de ${Math.abs(remaining).toFixed(2)} h</div>`;else msg=`<strong>${esc(subject)}</strong><div class="ok">Après validation : ${after.toFixed(2)} / ${target.toFixed(2)} h · ${remaining.toFixed(2)} h restantes</div>`;document.getElementById('event-progress-hint').innerHTML=msg;}
@@ -519,14 +517,29 @@ function removeTeacherRow(i){if(!confirm('Supprimer cet enseignant ?'))return;DA
 async function saveTeachers(){try{const res=await fetch(`/api/planner-save/${encodeURIComponent(SLUG)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teachers_data:DATA.teachers_data})});if(!res.ok)throw new Error(await res.text());showToast('Enseignants enregistrés.');}catch(e){showToast('Erreur pendant l’enregistrement des enseignants.');}}
 
 
+document.addEventListener('mousedown',e=>{
+    const handle=e.target.closest?.('.resize-handle[data-resize-mode]');
+    if(handle){
+        const card=handle.closest('.calendar-event');
+        if(card?.dataset.eventId){eventMouseDown(e,card.dataset.eventId,handle.dataset.resizeMode);}
+        return;
+    }
+    const card=e.target.closest?.('.calendar-event');
+    if(card?.dataset.eventId){eventMouseDown(e,card.dataset.eventId,'move');}
+});
+
 document.addEventListener('click',e=>{
     const teacherBtn=e.target.closest('[data-remove-teacher]');
     if(teacherBtn){removeTeacherChip(teacherBtn.dataset.removeTeacher,e);return;}
     const subgroupBtn=e.target.closest('[data-subgroup]');
     if(subgroupBtn){e.preventDefault();switchSubgroup(subgroupBtn.dataset.subgroup);return;}
+    const monthEvent=e.target.closest('.month-event[data-event-id]');
+    if(monthEvent){e.preventDefault();eventCardClick(e,monthEvent.dataset.eventId);return;}
+    const progressRow=e.target.closest('.progress-row[data-subject]');
+    if(progressRow){e.preventDefault();prefillSubject(progressRow.dataset.subject);return;}
 });
 document.addEventListener('keydown',e=>{
-    const card=e.target.closest?.('.calendar-event');
+    const card=e.target.closest?.('.calendar-event,.month-event');
     if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();eventCardClick(e,card.dataset.eventId);}
 });
 
