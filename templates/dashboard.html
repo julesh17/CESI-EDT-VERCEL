@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ planning_name }} — Tableau de bord</title>
+    <title>{{ planning_name }} - Tableau de bord</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
@@ -441,7 +441,7 @@ const BASE_URL = "{{ request.base_url }}";
 </script>
 <script>
 // ==========================================================
-// DASHBOARD JS — Port de la logique Streamlit (Mails, Récapitulatifs, Examens, Exports, Maquette)
+// DASHBOARD JS - Port de la logique Streamlit (Mails, Récapitulatifs, Examens, Exports, Maquette)
 // ==========================================================
 
 let DATA = { events_p1: [], events_p2: [], maquette_data: [], teachers_data: [] };
@@ -673,7 +673,7 @@ function renderStatsSelect() {
     }
 
     if (options.length === 0) {
-        sel.innerHTML = '<option value="">—</option>';
+        sel.innerHTML = '<option value="">-</option>';
     } else {
         sel.innerHTML = options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
     }
@@ -943,14 +943,14 @@ function renderMaquetteTable() {
         });
     }
 
-    document.getElementById('maquette-table-title').textContent = `Résultats pour ${maquettePromo} — ${groupSel}`;
+    document.getElementById('maquette-table-title').textContent = `Résultats pour ${maquettePromo} - ${groupSel}`;
 
     const headers = ['Matière','Heures cibles','Heures saisies','Écart','Séances'];
     const rowsDisplay = rowsOut.map(r => ({
         'Matière': r.subject,
-        'Heures cibles': r.target_hours !== null && r.target_hours !== undefined ? r.target_hours : '—',
+        'Heures cibles': r.target_hours !== null && r.target_hours !== undefined ? r.target_hours : '-',
         'Heures saisies': r.entered_hours,
-        'Écart': r.diff_hours !== null ? (r.diff_hours > 0 ? '+'+r.diff_hours : r.diff_hours) : '—',
+        'Écart': r.diff_hours !== null ? (r.diff_hours > 0 ? '+'+r.diff_hours : r.diff_hours) : '-',
         'Séances': r.sessions_entered,
         _raw: r
     }));
@@ -1045,7 +1045,7 @@ function renderBudgetGlobalMetrics() {
 }
 
 // ==========================================================
-// MINI CALENDRIER BUDGET — vue Semaine / Mois avec montant par séance
+// MINI CALENDRIER BUDGET - vue Semaine / Mois avec montant par séance
 // ==========================================================
 let bcalView = 'week';
 let bcalDate = new Date();
@@ -1295,8 +1295,8 @@ function bcalShowPopup(e, ev, triggerEl) {
 
     const groupsHtml = (ev.groups && ev.groups.length)
         ? ev.groups.join(', ') : 'Promo entière';
-    const teachersHtml = teachers.length ? teachers.join(' / ') : '—';
-    const roomHtml = ev.room ? esc(ev.room) : '—';
+    const teachersHtml = teachers.length ? teachers.join(' / ') : '-';
+    const roomHtml = ev.room ? esc(ev.room) : '-';
 
     popup.innerHTML = `
         <div class="bcal-popup-bar" style="background:${c.border}"></div>
