@@ -266,7 +266,7 @@
     </div>
     <div class="header-right">
         <a href="/calendrier/{{ slug }}" target="_blank" class="btn-back"><i class="bi bi-calendar3"></i> Calendrier</a>
-        <a href="/" class="btn-back"><i class="bi bi-arrow-left"></i> Accueil</a>
+        <a href="/" class="btn-back"><i class="bi bi-arrow-left"></i> Retour</a>
     </div>
 </header>
 
@@ -304,6 +304,8 @@
     <div class="panel-card" id="mail-preview-card">
         <h3>Aperçu (texte brut pour mail)</h3>
         <button class="copy-btn" onclick="copyMailPreview()"><i class="bi bi-clipboard"></i> Copier le texte</button>
+        <button class="btn-primary" id="prepare-mail-btn" onclick="prepareTeacherMail()" style="margin:0 0 10px 8px;"><i class="bi bi-envelope-arrow-up"></i> Préparer le mail + ICS</button>
+        <p id="mail-action-help" style="font-size:12px;color:var(--text-2);margin-bottom:10px;"></p>
         <textarea id="mail-preview" class="mail-preview" readonly></textarea>
     </div>
 </div>
@@ -449,6 +451,7 @@ let ALL_EVENTS_FLAT = [];   // events_p1 + events_p2 avec promo_label
 let TEACHERS_SET = new Set();
 let SUBJECTS_SET = new Set();
 let TEACHER_RATES = {};     // { "NOM, Prénom": tarif_horaire }
+let TEACHER_EMAILS = {};    // { "NOM, Prénom": email }
 let SUBJECT_COEFF = {};     // { "Matière": coefficient }
 
 let mailTone = 'tutoiement';
@@ -496,8 +499,10 @@ async function loadDashboardData() {
         }
 
         TEACHER_RATES = {};
+        TEACHER_EMAILS = {};
         for (const t of DATA.teachers_data) {
             TEACHER_RATES[t.name] = t.hourly_rate || 0;
+            TEACHER_EMAILS[t.name] = t.email || "";
         }
 
         SUBJECT_COEFF = {};
@@ -529,6 +534,10 @@ function initMailsTab() {
     }
     sel.innerHTML = sortedTeachers.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
     renderMailPreview();
+}
+
+function teacherSubscriptionUrl(teacher) {
+    return `${BASE_URL}ics/${encodeURIComponent(SLUG)}/enseignant.ics?teacher=${encodeURIComponent(teacher)}`;
 }
 
 function setMailTone(tone) {
@@ -609,8 +618,37 @@ function renderMailPreview() {
     }
 
     const totalStr = (Number.isInteger(totalHGlobal) ? totalHGlobal : totalHGlobal.toFixed(2).replace(/\.?0+$/,'')) ;
-    const finalTxt = `${intro}\n${body}\nTotal planifié : ${totalStr} heures.\n\n${closing}`;
+    const subscriptionUrl = teacherSubscriptionUrl(teacher);
+    const icsHelp = mailTone === 'tutoiement'
+        ? `\nTu trouveras également ton planning au format ICS. Un fichier ICS permet d'ajouter les séances dans un calendrier numérique (Outlook, Apple Calendrier, Google Agenda, etc.).\n\nDeux possibilités :\n- Importer le fichier joint : les séances sont ajoutées une fois dans ton calendrier. Les modifications futures ne se mettront pas à jour automatiquement.\n- T'abonner au calendrier avec ce lien : ${subscriptionUrl}\n  L'abonnement crée un calendrier séparé qui se met à jour automatiquement lorsque le planning est modifié. Dans ton application de calendrier, choisis « Ajouter un calendrier », « S'abonner à un calendrier » ou « À partir d'une URL », puis colle ce lien.`
+        : `\nVous trouverez également votre planning au format ICS. Un fichier ICS permet d'ajouter les séances dans un calendrier numérique (Outlook, Apple Calendrier, Google Agenda, etc.).\n\nDeux possibilités :\n- Importer le fichier joint : les séances sont ajoutées une fois dans votre calendrier. Les modifications futures ne se mettront pas à jour automatiquement.\n- Vous abonner au calendrier avec ce lien : ${subscriptionUrl}\n  L'abonnement crée un calendrier séparé qui se met à jour automatiquement lorsque le planning est modifié. Dans votre application de calendrier, choisissez « Ajouter un calendrier », « S'abonner à un calendrier » ou « À partir d'une URL », puis collez ce lien.`;
+    const finalTxt = `${intro}\n${body}\nTotal planifié : ${totalStr} heures.\n${icsHelp}\n\n${closing}`;
     out.value = finalTxt;
+
+    const email = TEACHER_EMAILS[teacher] || '';
+    document.getElementById('prepare-mail-btn').disabled = !email;
+    document.getElementById('mail-action-help').textContent = email
+        ? `Destinataire : ${email}. Le fichier ICS sera téléchargé avant l'ouverture du logiciel de messagerie.`
+        : `Aucune adresse email enregistrée pour ${teacher}.`;
+}
+
+function prepareTeacherMail() {
+    const teacher = document.getElementById('mail-teacher-select').value;
+    const email = TEACHER_EMAILS[teacher] || '';
+    if (!teacher || !email) return;
+
+    const evs = ALL_EVENTS_FLAT.filter(e => (e.teachers||[]).includes(teacher));
+    const ics = generateIcsString(evs, true);
+    const safeName = teacher.replace(/[^A-Za-z0-9À-ÿ_-]+/g, '_').replace(/^_+|_+$/g, '');
+    const filename = `Planning_${safeName || 'enseignant'}.ics`;
+    downloadIcs(ics, filename);
+
+    const subject = `Planning des interventions - ${teacher}`;
+    const body = document.getElementById('mail-preview').value + `
+
+[À joindre : ${filename}]`;
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setTimeout(() => { window.location.href = mailto; }, 250);
 }
 
 function copyMailPreview() {
@@ -781,28 +819,22 @@ function generateIcsString(events, includePrefix) {
         }
 
         const descLines = [];
-        const room = ev.room || ev.location || '';
-        if (room) descLines.push('Salle: ' + room);
         if (ev.description) descLines.push(ev.description);
         if (ev.teachers && ev.teachers.length) descLines.push('Enseignant(s): ' + ev.teachers.join(' / '));
         if (ev.groups && ev.groups.length) {
             descLines.push(ev.groups.length === 1 ? ('Groupe: ' + ev.groups[0]) : ('Groupes: ' + ev.groups.join(' et ')));
         }
 
-        const lines = [
+        body.push(
             'BEGIN:VEVENT',
             `UID:${uid}`,
             `DTSTAMP:${fmtIcsDt(new Date())}Z`,
             `DTSTART;TZID=Europe/Paris:${fmtIcsDt(ev.startDt)}`,
             `DTEND;TZID=Europe/Paris:${fmtIcsDt(ev.endDt)}`,
             `SUMMARY:${escIcalText(summaryText)}`,
-        ];
-        if (room) lines.push(`LOCATION:${escIcalText(room)}`);
-        lines.push(
             `DESCRIPTION:${escIcalText(descLines.join('\n'))}`,
             'END:VEVENT'
         );
-        body.push(...lines);
     }
     return header.concat(body, ['END:VCALENDAR']).join('\r\n');
 }
@@ -1296,7 +1328,6 @@ function bcalShowPopup(e, ev, triggerEl) {
     const groupsHtml = (ev.groups && ev.groups.length)
         ? ev.groups.join(', ') : 'Promo entière';
     const teachersHtml = teachers.length ? teachers.join(' / ') : '-';
-    const roomHtml = ev.room ? esc(ev.room) : '-';
 
     popup.innerHTML = `
         <div class="bcal-popup-bar" style="background:${c.border}"></div>
@@ -1304,7 +1335,6 @@ function bcalShowPopup(e, ev, triggerEl) {
         <div class="bcal-popup-title">${esc(ev.summary)}</div>
         <div class="bcal-popup-row"><i class="bi bi-calendar3"></i><div>${dateStr}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-clock"></i><div>${fmt2(ev.startDt.getHours())}:${fmt2(ev.startDt.getMinutes())} – ${fmt2(ev.endDt.getHours())}:${fmt2(ev.endDt.getMinutes())} (${Math.round(hours*100)/100} h)</div></div>
-        <div class="bcal-popup-row"><i class="bi bi-geo-alt"></i><div>${roomHtml}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-person"></i><div>${esc(teachersHtml)}</div></div>
         <div class="bcal-popup-row"><i class="bi bi-people"></i><div>${esc(groupsHtml)}</div></div>
         <div class="bcal-popup-amount">${fmtEUR(amount)}</div>
