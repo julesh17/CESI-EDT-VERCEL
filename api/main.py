@@ -607,9 +607,22 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris', uid_namespac
         dtstart = start_loc.strftime('%Y%m%dT%H%M%S')
         dtend = end_loc.strftime('%Y%m%dT%H%M%S')
 
-        summary = escape_ical_text(ev['summary'])
+        # Pour les flux multi-promos (notamment l'abonnement enseignant),
+        # rendre la promo et les groupes visibles directement dans le titre.
+        promo_label = str(ev.get('promo_label') or '').strip().upper()
+        groups = [str(g).strip() for g in (ev.get('groups') or []) if str(g).strip()]
+        title_parts = []
+        if promo_label:
+            title_parts.append(promo_label)
+        title_parts.extend(groups)
+        raw_summary = str(ev.get('summary') or '')
+        if title_parts:
+            raw_summary = f"[{' · '.join(title_parts)}] {raw_summary}"
+        summary = escape_ical_text(raw_summary)
 
         desc_lines = []
+        if promo_label:
+            desc_lines.append('Promotion : ' + promo_label)
         if ev.get('description'):
             desc_lines.append(ev['description'])
 
@@ -617,25 +630,33 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris', uid_namespac
         if teachers:
             desc_lines.append('Enseignant(s): ' + ' / '.join(teachers))
 
-        groups = ev.get('groups', [])
         if groups:
             if len(groups) == 1:
-                desc_lines.append('Groupe: ' + groups[0])
+                desc_lines.append('Groupe : ' + groups[0])
             else:
-                desc_lines.append('Groupes: ' + ' et '.join(groups))
+                desc_lines.append('Groupes : ' + ' et '.join(groups))
+
+        room = str(ev.get('room') or ev.get('location') or '').strip()
+        if room:
+            desc_lines.append('Salle : ' + room)
 
         description = escape_ical_text('\n'.join(desc_lines))
 
-        body.extend([
+        event_lines = [
             'BEGIN:VEVENT',
             f'UID:{uid}',
             f'DTSTAMP:{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}',
             f'DTSTART;TZID={tzname}:{dtstart}',
             f'DTEND;TZID={tzname}:{dtend}',
             f'SUMMARY:{summary}',
+        ]
+        if room:
+            event_lines.append(f'LOCATION:{escape_ical_text(room)}')
+        event_lines.extend([
             f'DESCRIPTION:{description}',
             'END:VEVENT'
         ])
+        body.extend(event_lines)
 
     footer = ['END:VCALENDAR']
     return '\n'.join(header + body + footer)
@@ -845,7 +866,13 @@ async def get_teacher_ics_file(slug: str, teacher: str):
 
         data = res.data[0]
         known_teachers = {str(t.get("name", "")).strip() for t in (data.get("teachers_data") or [])}
-        all_events = (data.get("events_p1") or []) + (data.get("events_p2") or [])
+        # Conserver l'origine P1/P2 : le calendrier de l'enseignant mélange les
+        # deux promotions et l'information doit donc voyager avec chaque séance.
+        all_events = []
+        for ev in (data.get("events_p1") or []):
+            all_events.append({**ev, "promo_label": "P1"})
+        for ev in (data.get("events_p2") or []):
+            all_events.append({**ev, "promo_label": "P2"})
         events = [ev for ev in all_events if teacher in (ev.get("teachers") or [])]
         if teacher not in known_teachers and not events:
             raise HTTPException(404, detail="Enseignant introuvable")
