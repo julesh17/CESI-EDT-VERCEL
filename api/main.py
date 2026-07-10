@@ -4,7 +4,7 @@ import re
 import uuid
 import hashlib
 from datetime import datetime, date, time
-from typing import List
+from typing import List, Dict, Tuple, Optional
 
 # --- BIBLIOTHEQUES WEB ---
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
@@ -725,6 +725,625 @@ def parse_teachers_sheet(file_content: bytes) -> List[dict]:
 
 
 # ==========================================
+# 2d. PARSING OPUS/FNG (PDF DES SALLES)
+# ==========================================
+
+def clean_pdf_cell(value) -> str:
+    """Nettoie une cellule extraite d'un tableau PDF."""
+    if value is None:
+        return ""
+    text = str(value).replace("\r", "\n")
+    text = re.sub(r"\s*\n\s*", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def parse_opus_date(value) -> Optional[date]:
+    """Extrait une date JJ/MM/AA ou JJ/MM/AAAA d'une cellule Opus."""
+    text = clean_pdf_cell(value)
+    match = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})", text)
+    if not match:
+        return None
+
+    raw_date = match.group(1)
+    for date_format in ("%d/%m/%y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(raw_date, date_format).date()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_opus_time(value) -> Optional[time]:
+    """
+    Extrait une heure du PDF.
+
+    Les minutes sont parfois coupées sur deux lignes, par exemple « 12:3 0 ».
+    """
+    text = clean_pdf_cell(value).replace(" ", "")
+    text = re.sub(r"[^0-9:]", "", text)
+
+    match = re.match(r"^(\d{1,2}):(\d{1,2})$", text)
+    if not match:
+        return None
+
+    hour = int(match.group(1))
+    minute_text = match.group(2)
+
+    if len(minute_text) == 1:
+        minute_text += "0"
+
+    minute = int(minute_text)
+
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+
+    return time(hour, minute)
+
+
+def normalize_room_label(value) -> str:
+    """Normalise une salle, y compris lorsqu'elle est coupée sur plusieurs lignes."""
+    return clean_pdf_cell(value)
+
+
+def parse_opus_targets(group_value: str) -> List[dict]:
+    """
+    Convertit le groupe Opus en cible interne.
+
+    Exemples :
+      - « Groupe session complète » -> P1 et P2 ;
+      - « Promo 1 Groupe 2 » -> P1 / G 2 ;
+      - « Promo 2 » -> toute la P2.
+    """
+    text = clean_pdf_cell(group_value)
+    if not text:
+        return []
+
+    lowered = text.lower()
+
+    if "session" in lowered and "compl" in lowered:
+        return [
+            {"promo": "p1", "subgroup": None},
+            {"promo": "p2", "subgroup": None},
+        ]
+
+    promo_match = re.search(r"promo\s*([12])", lowered)
+    if not promo_match:
+        return []
+
+    promo = "p" + promo_match.group(1)
+
+    group_match = re.search(r"groupe\s*(\d+)", lowered)
+    subgroup = f"G {int(group_match.group(1))}" if group_match else None
+
+    return [{"promo": promo, "subgroup": subgroup}]
+
+
+def merge_pdf_table_rows(left: list, right: list) -> list:
+    """Fusionne deux morceaux d'une même ligne coupée entre deux pages."""
+    left = (list(left or []) + [None] * 9)[:9]
+    right = (list(right or []) + [None] * 9)[:9]
+
+    merged = []
+    for left_value, right_value in zip(left, right):
+        left_text = clean_pdf_cell(left_value)
+        right_text = clean_pdf_cell(right_value)
+
+        if left_text and right_text:
+            merged.append(f"{left_text} {right_text}")
+        else:
+            merged.append(left_text or right_text)
+
+    return merged
+
+
+def is_opus_header_row(row: list) -> bool:
+    row = (list(row or []) + [None] * 9)[:9]
+    joined = " ".join(clean_pdf_cell(cell).lower() for cell in row)
+
+    return (
+        "date" in joined
+        and "début" in joined
+        and "fin" in joined
+        and "salle" in joined
+    )
+
+
+def row_has_meaningful_text(row: list) -> bool:
+    return any(clean_pdf_cell(cell) for cell in (row or []))
+
+
+def row_looks_like_event_fragment(row: list) -> bool:
+    row = (list(row or []) + [None] * 9)[:9]
+
+    return bool(
+        clean_pdf_cell(row[0])
+        or parse_opus_time(row[1])
+        or parse_opus_time(row[2])
+        or clean_pdf_cell(row[3])
+        or clean_pdf_cell(row[4])
+        or clean_pdf_cell(row[5])
+        or clean_pdf_cell(row[6])
+    )
+
+
+def row_looks_like_page_continuation(previous_row: list, current_row: list) -> bool:
+    """
+    Détecte une ligne en haut de page qui complète la dernière ligne de la page
+    précédente, sans confondre cette situation avec une nouvelle séance.
+    """
+    if not previous_row or not current_row:
+        return False
+
+    previous_row = (list(previous_row) + [None] * 9)[:9]
+    current_row = (list(current_row) + [None] * 9)[:9]
+
+    if not row_has_meaningful_text(current_row):
+        return False
+    if not row_looks_like_event_fragment(previous_row):
+        return False
+    if is_opus_header_row(current_row):
+        return False
+
+    # Une nouvelle séance possède généralement une heure de début ou une cible
+    # Promo/Groupe. Une continuation complète plutôt une date, une minute,
+    # un intitulé ou une salle.
+    if parse_opus_time(current_row[1]) is not None:
+        return False
+    if parse_opus_targets(clean_pdf_cell(current_row[5])):
+        return False
+
+    previous_missing_date = parse_opus_date(previous_row[0]) is None
+    current_supplies_date = parse_opus_date(current_row[0]) is not None
+
+    merged_end_is_valid = parse_opus_time(
+        f"{clean_pdf_cell(previous_row[2])}{clean_pdf_cell(current_row[2])}"
+    ) is not None
+
+    continuation_text = any(
+        clean_pdf_cell(current_row[index])
+        for index in (3, 4, 6, 7, 8)
+    )
+
+    return (
+        (previous_missing_date and current_supplies_date)
+        or merged_end_is_valid
+        or continuation_text
+    )
+
+
+def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
+    """
+    Parse le PDF Opus/FNG et extrait uniquement :
+      - promotion/groupe ;
+      - date ;
+      - heure de début ;
+      - heure de fin ;
+      - salle.
+
+    Matières et enseignants du PDF sont volontairement ignorés.
+    """
+    try:
+        import pdfplumber
+    except Exception as exc:
+        raise RuntimeError(
+            "La dépendance pdfplumber est requise pour lire les PDF Opus/FNG."
+        ) from exc
+
+    entries: List[dict] = []
+    last_entry_by_slot: Dict[Tuple[date, time, time], dict] = {}
+
+    table_settings = {
+        "vertical_strategy": "lines",
+        "horizontal_strategy": "lines",
+        "snap_tolerance": 3,
+        "join_tolerance": 3,
+        "edge_min_length": 3,
+        "min_words_vertical": 1,
+        "min_words_horizontal": 1,
+        "text_x_tolerance": 2,
+        "text_y_tolerance": 3,
+    }
+
+    def process_row(row: list, pages: List[int]):
+        row = (list(row or []) + [None] * 9)[:9]
+
+        if is_opus_header_row(row):
+            return
+
+        day = parse_opus_date(row[0])
+        start_time = parse_opus_time(row[1])
+        end_time = parse_opus_time(row[2])
+
+        if not (day and start_time and end_time):
+            return
+
+        room = normalize_room_label(row[6])
+        if not room:
+            return
+
+        pdf_group = clean_pdf_cell(row[5])
+        targets = parse_opus_targets(pdf_group)
+        slot_key = (day, start_time, end_time)
+
+        if targets:
+            entry = {
+                "page": pages[0] if pages else None,
+                "pages": list(dict.fromkeys(pages)),
+                "start": datetime.combine(day, start_time),
+                "end": datetime.combine(day, end_time),
+                "targets": targets,
+                "room": room,
+                "rooms": [room],
+                "pdf_group": pdf_group,
+            }
+            entries.append(entry)
+            last_entry_by_slot[slot_key] = entry
+            return
+
+        # Certaines salles supplémentaires sont placées sur une ligne séparée,
+        # avec le même créneau mais sans répétition du groupe.
+        previous_entry = last_entry_by_slot.get(slot_key)
+        if previous_entry:
+            previous_entry["rooms"].append(room)
+            previous_entry["rooms"] = list(
+                dict.fromkeys(previous_entry["rooms"])
+            )
+            previous_entry["room"] = " / ".join(previous_entry["rooms"])
+
+            previous_pages = previous_entry.setdefault("pages", [])
+            for page_number in pages:
+                if page_number not in previous_pages:
+                    previous_pages.append(page_number)
+
+    pending_last_row = None
+    pending_last_pages: List[int] = []
+
+    with pdfplumber.open(io.BytesIO(file_content)) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            try:
+                table = page.extract_table(table_settings) or []
+            except Exception as exc:
+                log_msg(
+                    f"Lecture tableau PDF impossible page {page_number}: {exc}"
+                )
+                table = []
+
+            data_rows = [
+                list(row)
+                for row in table
+                if row_has_meaningful_text(row) and not is_opus_header_row(row)
+            ]
+
+            if not data_rows:
+                continue
+
+            if pending_last_row is not None:
+                first_row = data_rows[0]
+
+                if row_looks_like_page_continuation(
+                    pending_last_row,
+                    first_row,
+                ):
+                    merged_row = merge_pdf_table_rows(
+                        pending_last_row,
+                        first_row,
+                    )
+                    process_row(
+                        merged_row,
+                        pending_last_pages + [page_number],
+                    )
+                    data_rows = data_rows[1:]
+                else:
+                    process_row(pending_last_row, pending_last_pages)
+
+                pending_last_row = None
+                pending_last_pages = []
+
+            if not data_rows:
+                continue
+
+            for row in data_rows[:-1]:
+                process_row(row, [page_number])
+
+            pending_last_row = data_rows[-1]
+            pending_last_pages = [page_number]
+
+    if pending_last_row is not None:
+        process_row(pending_last_row, pending_last_pages)
+
+    # Une même cible/créneau peut apparaître plusieurs fois dans le PDF.
+    # On regroupe alors toutes les salles.
+    merged: Dict[
+        Tuple[datetime, datetime, str, Optional[str]],
+        dict,
+    ] = {}
+
+    for entry in entries:
+        for target in entry["targets"]:
+            key = (
+                entry["start"],
+                entry["end"],
+                target["promo"],
+                target.get("subgroup"),
+            )
+
+            if key not in merged:
+                merged[key] = {
+                    "start": entry["start"],
+                    "end": entry["end"],
+                    "promo": target["promo"],
+                    "subgroup": target.get("subgroup"),
+                    "rooms": [],
+                    "pdf_groups": set(),
+                    "pages": set(),
+                }
+
+            merged[key]["rooms"].extend(
+                entry.get("rooms") or [entry["room"]]
+            )
+
+            if entry.get("pdf_group"):
+                merged[key]["pdf_groups"].add(entry["pdf_group"])
+
+            for page_number in (
+                entry.get("pages") or [entry.get("page")]
+            ):
+                if page_number:
+                    merged[key]["pages"].add(page_number)
+
+    output = []
+
+    for value in merged.values():
+        unique_rooms = list(
+            dict.fromkeys(
+                room for room in value["rooms"] if room
+            )
+        )
+
+        if not unique_rooms:
+            continue
+
+        output.append({
+            "start": value["start"],
+            "end": value["end"],
+            "promo": value["promo"],
+            "subgroup": value["subgroup"],
+            "room": " / ".join(unique_rooms),
+            "pdf_groups": sorted(value["pdf_groups"]),
+            "pages": sorted(value["pages"]),
+        })
+
+    log_msg(f"PDF Opus/FNG: {len(output)} créneau(x) de salle extrait(s).")
+    return output
+
+
+def parse_iso_datetime(value) -> Optional[datetime]:
+    if not value:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")
+        )
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(PARIS_TZ).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+def calendar_bounds(
+    events_p1: List[dict],
+    events_p2: List[dict],
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    starts = []
+    ends = []
+
+    for event in (events_p1 or []) + (events_p2 or []):
+        start = parse_iso_datetime(event.get("start"))
+        end = parse_iso_datetime(event.get("end"))
+
+        if start:
+            starts.append(start)
+        if end:
+            ends.append(end)
+
+    if not starts or not ends:
+        return None, None
+
+    return min(starts), max(ends)
+
+
+def room_target_matches_event(
+    entry: dict,
+    event: dict,
+    promo: str,
+) -> bool:
+    """Teste seulement la promotion et le groupe."""
+    if entry.get("promo") != promo:
+        return False
+
+    subgroup = entry.get("subgroup")
+
+    # Une cible sans sous-groupe concerne toute la promotion.
+    if not subgroup:
+        return True
+
+    event_groups = normalized_event_groups(event)
+    return subgroup in event_groups
+
+
+def intervals_are_compatible(
+    opus_start: datetime,
+    opus_end: datetime,
+    event_start: datetime,
+    event_end: datetime,
+) -> bool:
+    """
+    Accepte un créneau exact ou un créneau qui englobe entièrement l'autre.
+
+    Cela couvre notamment un créneau Opus de quatre heures correspondant à deux
+    séances internes successives de deux heures.
+    """
+    if not (opus_start and opus_end and event_start and event_end):
+        return False
+
+    if opus_start.date() != event_start.date():
+        return False
+
+    tolerance = pd.Timedelta(minutes=1).to_pytimedelta()
+
+    event_inside_opus = (
+        (opus_start - tolerance) <= event_start
+        and event_end <= (opus_end + tolerance)
+    )
+    opus_inside_event = (
+        (event_start - tolerance) <= opus_start
+        and opus_end <= (event_end + tolerance)
+    )
+
+    return event_inside_opus or opus_inside_event
+
+
+def calendar_range_overlaps(
+    entry_start: datetime,
+    entry_end: datetime,
+    calendar_start: datetime,
+    calendar_end: datetime,
+) -> bool:
+    if not (
+        entry_start
+        and entry_end
+        and calendar_start
+        and calendar_end
+    ):
+        return False
+
+    return (
+        entry_end >= calendar_start
+        and entry_start <= calendar_end
+    )
+
+
+def inject_rooms_into_events(
+    events_p1: List[dict],
+    events_p2: List[dict],
+    room_entries: List[dict],
+) -> dict:
+    """
+    Met à jour uniquement les salles.
+
+    Matière, enseignants, description et autres informations de séance restent
+    inchangés.
+    """
+    calendar_start, calendar_end = calendar_bounds(
+        events_p1,
+        events_p2,
+    )
+
+    if not calendar_start or not calendar_end:
+        return {
+            "events_p1": events_p1 or [],
+            "events_p2": events_p2 or [],
+            "parsed_rooms": len(room_entries or []),
+            "usable_rooms": 0,
+            "matched_events": 0,
+            "unmatched_rooms": len(room_entries or []),
+        }
+
+    usable_entries = [
+        entry
+        for entry in (room_entries or [])
+        if (
+            entry.get("start")
+            and entry.get("end")
+            and entry.get("room")
+            and calendar_range_overlaps(
+                entry["start"],
+                entry["end"],
+                calendar_start,
+                calendar_end,
+            )
+        )
+    ]
+
+    entry_used = [False] * len(usable_entries)
+
+    def update_event_list(
+        events: List[dict],
+        promo: str,
+    ) -> Tuple[List[dict], int]:
+        updated_events = []
+        matched_count = 0
+
+        for event in events or []:
+            event_copy = dict(event)
+
+            event_start = parse_iso_datetime(event_copy.get("start"))
+            event_end = parse_iso_datetime(event_copy.get("end"))
+
+            if not event_start or not event_end:
+                updated_events.append(event_copy)
+                continue
+
+            rooms = []
+
+            for index, entry in enumerate(usable_entries):
+                if (
+                    room_target_matches_event(
+                        entry,
+                        event_copy,
+                        promo,
+                    )
+                    and intervals_are_compatible(
+                        entry.get("start"),
+                        entry.get("end"),
+                        event_start,
+                        event_end,
+                    )
+                ):
+                    room = str(entry.get("room") or "").strip()
+                    if room:
+                        rooms.append(room)
+                        entry_used[index] = True
+
+            unique_rooms = list(dict.fromkeys(rooms))
+
+            # On ne modifie la salle que lorsque le PDF contient réellement
+            # une salle correspondante. Une séance sans correspondance garde
+            # donc sa salle actuelle.
+            if unique_rooms:
+                event_copy["room"] = " / ".join(unique_rooms)
+                matched_count += 1
+
+            updated_events.append(event_copy)
+
+        return updated_events, matched_count
+
+    new_p1, matched_p1 = update_event_list(
+        events_p1 or [],
+        "p1",
+    )
+    new_p2, matched_p2 = update_event_list(
+        events_p2 or [],
+        "p2",
+    )
+
+    return {
+        "events_p1": new_p1,
+        "events_p2": new_p2,
+        "parsed_rooms": len(room_entries or []),
+        "usable_rooms": len(usable_entries),
+        "matched_events": matched_p1 + matched_p2,
+        "unmatched_rooms": sum(
+            1 for used in entry_used if not used
+        ),
+        "calendar_start": calendar_start.isoformat(),
+        "calendar_end": calendar_end.isoformat(),
+    }
+
+
+# ==========================================
 # 3. GENERATEUR ICS
 # ==========================================
 
@@ -1053,6 +1672,97 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
         raise HTTPException(500, detail="Erreur lors de la mise à jour du planning.")
 
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/inject-rooms/{slug}")
+async def inject_rooms_from_opus(
+    slug: str,
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """Ajoute ou met à jour les salles depuis un PDF Opus/FNG."""
+    if not get_current_user(request):
+        return RedirectResponse("/login", status_code=303)
+
+    filename = (file.filename or "").lower()
+
+    if filename and not filename.endswith(".pdf"):
+        return RedirectResponse(
+            "/?error=rooms_bad_file",
+            status_code=303,
+        )
+
+    try:
+        content = await file.read()
+
+        if not content:
+            return RedirectResponse(
+                "/?error=rooms_empty_file",
+                status_code=303,
+            )
+
+        result = (
+            supabase.table("plannings")
+            .select("events_p1, events_p2")
+            .ilike("slug", slug)
+            .execute()
+        )
+
+        if not result.data:
+            raise HTTPException(
+                404,
+                detail="Planning introuvable",
+            )
+
+        current = result.data[0]
+        events_p1 = current.get("events_p1", []) or []
+        events_p2 = current.get("events_p2", []) or []
+
+        room_entries = parse_opus_pdf_rooms(content)
+
+        inject_result = inject_rooms_into_events(
+            events_p1,
+            events_p2,
+            room_entries,
+        )
+
+        (
+            supabase.table("plannings")
+            .update({
+                "events_p1": inject_result["events_p1"],
+                "events_p2": inject_result["events_p2"],
+                "updated_at": datetime.now(PARIS_TZ).isoformat(),
+            })
+            .eq("slug", slug)
+            .execute()
+        )
+
+        log_msg(
+            f"Salles Opus pour {slug}: "
+            f"PDF={inject_result['parsed_rooms']}, "
+            f"dans période={inject_result['usable_rooms']}, "
+            f"événements mis à jour={inject_result['matched_events']}, "
+            f"non rapprochées={inject_result['unmatched_rooms']}"
+        )
+
+        return RedirectResponse(
+            (
+                "/?success=rooms"
+                f"&rooms_matched={inject_result['matched_events']}"
+                f"&rooms_pdf={inject_result['usable_rooms']}"
+                f"&rooms_unmatched={inject_result['unmatched_rooms']}"
+            ),
+            status_code=303,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_msg(f"Erreur injection salles Opus: {exc}")
+        return RedirectResponse(
+            "/?error=rooms",
+            status_code=303,
+        )
 
 
 # --- URL PUBLIQUE POUR OUTLOOK ---
