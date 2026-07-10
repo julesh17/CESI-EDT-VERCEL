@@ -4,7 +4,7 @@ import re
 import uuid
 import hashlib
 from datetime import datetime, date, time
-from typing import List, Dict, Tuple, Optional
+from typing import List
 
 # --- BIBLIOTHEQUES WEB ---
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
@@ -468,8 +468,8 @@ def parse_teachers_sheet(file_content: bytes) -> List[dict]:
     Structure (0-indexé) :
       col 1 = Nom (format "NOM, Prénom" — identique au format utilisé dans EDT P1/P2)
       col 2 = Organisme
-      col 3 = Majoration (1 = oui / vide = non, utilisé par la formule Excel)
-      col 4 = Pourcentage de majoration
+      col 3 = Email
+      col 4 = Majoration / pourcentage selon le classeur
       col 5 = Tarif horaire théorique
       col 6 = Tarif horaire effectif (= théorique si majoration, sinon théorique x1.25)
       col 7 = Région
@@ -520,497 +520,21 @@ def parse_teachers_sheet(file_content: bytes) -> List[dict]:
             continue
         seen_names.add(name)
 
+        email = str(df.iat[i, 3]).strip() if df.shape[1] > 3 and pd.notna(df.iat[i, 3]) else ""
+        if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            log_msg(f"Email enseignant ignoré (format invalide) pour {name}: {email}")
+            email = ""
+
         rate = safe_float(df.iat[i, 6])  # tarif effectif (colonne G / index 6)
         rows_out.append({
             "name": name,
             "organism": str(df.iat[i, 2]).strip() if pd.notna(df.iat[i, 2]) else "",
+            "email": email,
             "hourly_rate": rate if rate is not None else 0.0,
         })
 
     log_msg(f"Enseignants: {len(rows_out)} tarifs extraits.")
     return rows_out
-
-
-
-
-# ==========================================
-# 2d. PARSING OPUS/FNG (PDF des salles)
-# ==========================================
-
-def clean_pdf_cell(value) -> str:
-    """Nettoie une cellule extraite d'un PDF Opus/FNG."""
-    if value is None:
-        return ""
-    s = str(value).replace("\r", "\n")
-    s = re.sub(r"\s*\n\s*", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def parse_opus_date(value) -> Optional[date]:
-    """Extrait une date JJ/MM/AA d'une cellule Opus pouvant contenir le jour de semaine."""
-    s = clean_pdf_cell(value)
-    m = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})", s)
-    if not m:
-        return None
-    raw = m.group(1)
-    for fmt in ("%d/%m/%y", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(raw, fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def parse_opus_time(value) -> Optional[time]:
-    """
-    Extrait une heure Opus. Le PDF coupe parfois les minutes sur deux lignes
-    (ex: "12:3\n0"), donc on supprime les blancs avant de parser.
-    """
-    s = clean_pdf_cell(value).replace(" ", "")
-    s = re.sub(r"[^0-9:]", "", s)
-    m = re.match(r"^(\d{1,2}):(\d{1,2})$", s)
-    if not m:
-        return None
-    hour = int(m.group(1))
-    minute_txt = m.group(2)
-    if len(minute_txt) == 1:
-        minute_txt = minute_txt + "0"
-    minute = int(minute_txt)
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    return time(hour, minute)
-
-
-def normalize_room_label(value) -> str:
-    """Normalise une salle, y compris les salles sur deux lignes (ex: A012 Pléïades 2)."""
-    return clean_pdf_cell(value).strip()
-
-
-def parse_opus_targets(group_value: str) -> List[dict]:
-    """
-    Transforme le libellé Groupe du PDF Opus en cibles internes.
-      - Groupe session complète -> P1 + P2
-      - Promo 1 Groupe 1 -> P1 / G 1
-      - Promo 2 -> toute la P2
-    Les lignes hors promo (ex: Jury) sont ignorées.
-    """
-    s = clean_pdf_cell(group_value)
-    if not s:
-        return []
-    sl = s.lower()
-
-    if "session" in sl and "compl" in sl:
-        return [{"promo": "p1", "subgroup": None}, {"promo": "p2", "subgroup": None}]
-
-    promo_match = re.search(r"promo\s*([12])", sl)
-    if not promo_match:
-        return []
-
-    promo = "p" + promo_match.group(1)
-    group_match = re.search(r"groupe\s*(\d+)", sl)
-    subgroup = f"G {int(group_match.group(1))}" if group_match else None
-    return [{"promo": promo, "subgroup": subgroup}]
-
-
-def merge_pdf_table_rows(left: list, right: list) -> list:
-    """
-    Fusionne deux fragments de ligne Opus.
-
-    Cas réel observé dans le PDF fourni : une séance en bas de page peut finir sur
-    la page suivante. Exemple page 23 -> 24 :
-      ['mar.', '13:30', '17:3', 'Electrotechnique et électronique de', ...]
-      ['30/09/25', '', '0', 'puissance', 'promos', ...]
-    La fusion redonne une ligne exploitable par les parseurs regex.
-    """
-    left = (left + [None] * 9)[:9]
-    right = (right + [None] * 9)[:9]
-    merged = []
-    for a, b in zip(left, right):
-        sa = clean_pdf_cell(a)
-        sb = clean_pdf_cell(b)
-        if sa and sb:
-            merged.append(f"{sa} {sb}")
-        else:
-            merged.append(sa or sb)
-    return merged
-
-
-def is_opus_header_row(row: list) -> bool:
-    row = (row + [None] * 9)[:9]
-    joined = " ".join(clean_pdf_cell(c).lower() for c in row)
-    return "date" in joined and "début" in joined and "fin" in joined and "salle" in joined
-
-
-def row_has_meaningful_text(row: list) -> bool:
-    return any(clean_pdf_cell(c) for c in (row or []))
-
-
-def row_looks_like_event_fragment(row: list) -> bool:
-    """Détecte une ligne qui ressemble au début ou à un morceau de séance Opus."""
-    row = (row + [None] * 9)[:9]
-    return bool(
-        clean_pdf_cell(row[0])
-        or parse_opus_time(row[1])
-        or parse_opus_time(row[2])
-        or clean_pdf_cell(row[3])
-        or clean_pdf_cell(row[4])
-        or clean_pdf_cell(row[5])
-        or clean_pdf_cell(row[6])
-    )
-
-
-def row_looks_like_page_continuation(previous_row: list, current_row: list) -> bool:
-    """
-    Vrai si current_row semble compléter previous_row après un saut de page.
-
-    On évite volontairement les lignes de salles additionnelles normales : elles
-    portent généralement date + début + fin + salle, et doivent être rattachées au
-    créneau précédent plutôt que fusionnées avec la dernière ligne de la page.
-    """
-    if not previous_row or not current_row:
-        return False
-    previous_row = (previous_row + [None] * 9)[:9]
-    current_row = (current_row + [None] * 9)[:9]
-
-    if not row_has_meaningful_text(current_row):
-        return False
-    if not row_looks_like_event_fragment(previous_row):
-        return False
-    if is_opus_header_row(current_row):
-        return False
-
-    current_has_start = parse_opus_time(current_row[1]) is not None
-    current_has_targets = bool(parse_opus_targets(clean_pdf_cell(current_row[5])))
-
-    # Une vraie nouvelle séance a presque toujours un début. Une continuation de
-    # haut de page complète plutôt la date, la fin, la matière, le découpage ou la salle.
-    if current_has_start or current_has_targets:
-        return False
-
-    previous_missing_date = parse_opus_date(previous_row[0]) is None
-    current_supplies_date = parse_opus_date(current_row[0]) is not None
-    previous_end_txt = clean_pdf_cell(previous_row[2])
-    current_end_txt = clean_pdf_cell(current_row[2])
-
-    # Signaux forts vus dans le PDF : date seule en haut de page, minute finale
-    # isolée, ou mots de fin de cellule matière/découpage/salle.
-    if previous_missing_date and current_supplies_date:
-        return True
-    if re.match(r"^\d{1,2}:\d$", previous_end_txt.replace(" ", "")) and re.match(r"^\d$", current_end_txt):
-        return True
-    if any(clean_pdf_cell(current_row[i]) for i in (3, 4, 6, 7, 8)) and not current_has_start:
-        return True
-
-    return False
-
-
-def parse_opus_pdf_rooms(file_content: bytes) -> List[dict]:
-    """
-    Parse le PDF Opus/FNG et retourne uniquement les lignes exploitables pour les salles.
-
-    On ne s'appuie volontairement que sur : date, heure de début, heure de fin,
-    groupe et salle. Les matières et intervenants d'Opus sont ignorés car ils peuvent
-    différer du planning principal.
-
-    Points importants validés sur le PDF fourni :
-      - les dates sont extraites par regex JJ/MM/AA, jamais par dateutil sur "mar." ;
-      - les heures coupées ("12:3\n0", "17:3" + "0") sont recomposées ;
-      - les salles multi-lignes ("A012 Pléïades\n2") sont conservées ;
-      - les lignes coupées entre deux pages sont fusionnées avant parsing ;
-      - les salles supplémentaires sur une ligne séparée sont rattachées au même créneau.
-    """
-    try:
-        import pdfplumber
-    except Exception as exc:
-        raise RuntimeError("La dépendance pdfplumber est requise pour lire les PDF Opus.") from exc
-
-    entries: List[dict] = []
-    last_entry_by_slot: Dict[Tuple[date, time, time], dict] = {}
-
-    table_settings = {
-        "vertical_strategy": "lines",
-        "horizontal_strategy": "lines",
-        "snap_tolerance": 3,
-        "join_tolerance": 3,
-        "edge_min_length": 3,
-        "min_words_vertical": 1,
-        "min_words_horizontal": 1,
-        "text_x_tolerance": 2,
-        "text_y_tolerance": 3,
-    }
-
-    def process_row(row: list, pages: List[int]):
-        row = (row + [None] * 9)[:9]
-        if is_opus_header_row(row):
-            return
-
-        day = parse_opus_date(row[0])
-        start_t = parse_opus_time(row[1])
-        end_t = parse_opus_time(row[2])
-        if not (day and start_t and end_t):
-            return
-
-        room = normalize_room_label(row[6])
-        if not room:
-            return
-
-        group_label = clean_pdf_cell(row[5])
-        targets = parse_opus_targets(group_label)
-        slot_key = (day, start_t, end_t)
-
-        if targets:
-            entry = {
-                "page": pages[0] if pages else None,
-                "pages": pages,
-                "start": datetime.combine(day, start_t),
-                "end": datetime.combine(day, end_t),
-                "targets": targets,
-                "room": room,
-                "rooms": [room],
-                "pdf_group": group_label,
-            }
-            entries.append(entry)
-            last_entry_by_slot[slot_key] = entry
-        else:
-            # Salle sur une ligne de continuation : on la rattache au créneau précédent.
-            previous = last_entry_by_slot.get(slot_key)
-            if previous:
-                previous["rooms"].append(room)
-                previous["room"] = " / ".join(dict.fromkeys(previous["rooms"]))
-                previous_pages = previous.setdefault("pages", [])
-                for p in pages:
-                    if p not in previous_pages:
-                        previous_pages.append(p)
-
-    pending_last_row = None
-    pending_last_pages: List[int] = []
-
-    with pdfplumber.open(io.BytesIO(file_content)) as pdf:
-        for page_number, page in enumerate(pdf.pages, start=1):
-            try:
-                table = page.extract_table(table_settings) or page.extract_table() or []
-            except Exception:
-                table = []
-
-            data_rows = []
-            for raw_row in table:
-                row = (list(raw_row or []) + [None] * 9)[:9]
-                if is_opus_header_row(row):
-                    continue
-                if not row_has_meaningful_text(row):
-                    continue
-                data_rows.append(row)
-
-            # Si la page précédente s'est terminée sur un fragment, vérifier si la
-            # première ligne de cette page le complète.
-            if pending_last_row is not None:
-                if data_rows and row_looks_like_page_continuation(pending_last_row, data_rows[0]):
-                    merged_row = merge_pdf_table_rows(pending_last_row, data_rows[0])
-                    process_row(merged_row, pending_last_pages + [page_number])
-                    data_rows = data_rows[1:]
-                else:
-                    process_row(pending_last_row, pending_last_pages)
-                pending_last_row = None
-                pending_last_pages = []
-
-            if not data_rows:
-                continue
-
-            # On garde toujours la dernière ligne de la page en attente afin de
-            # pouvoir la fusionner avec le haut de page suivant si Opus l'a coupée.
-            for row in data_rows[:-1]:
-                process_row(row, [page_number])
-            pending_last_row = data_rows[-1]
-            pending_last_pages = [page_number]
-
-    if pending_last_row is not None:
-        process_row(pending_last_row, pending_last_pages)
-
-    # Fusion de sécurité : si le même créneau/cible apparaît plusieurs fois, on regroupe les salles.
-    merged: Dict[Tuple[datetime, datetime, str, Optional[str]], dict] = {}
-    for entry in entries:
-        for target in entry["targets"]:
-            key = (entry["start"], entry["end"], target["promo"], target.get("subgroup"))
-            if key not in merged:
-                merged[key] = {
-                    "start": entry["start"],
-                    "end": entry["end"],
-                    "promo": target["promo"],
-                    "subgroup": target.get("subgroup"),
-                    "rooms": [],
-                    "pdf_groups": set(),
-                    "pages": set(),
-                }
-            merged[key]["rooms"].extend(entry.get("rooms") or [entry["room"]])
-            if entry.get("pdf_group"):
-                merged[key]["pdf_groups"].add(entry["pdf_group"])
-            for p in (entry.get("pages") or [entry.get("page")]):
-                if p:
-                    merged[key]["pages"].add(p)
-
-    out = []
-    for value in merged.values():
-        unique_rooms = list(dict.fromkeys([r for r in value["rooms"] if r]))
-        if not unique_rooms:
-            continue
-        out.append({
-            "start": value["start"],
-            "end": value["end"],
-            "promo": value["promo"],
-            "subgroup": value["subgroup"],
-            "room": " / ".join(unique_rooms),
-            "pdf_groups": sorted(value["pdf_groups"]),
-            "pages": sorted(p for p in value["pages"] if p),
-        })
-
-    return out
-
-def parse_iso_datetime(value) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
-    except Exception:
-        return None
-
-
-def calendar_bounds(events_p1: List[dict], events_p2: List[dict]) -> Tuple[Optional[datetime], Optional[datetime]]:
-    starts, ends = [], []
-    for ev in (events_p1 or []) + (events_p2 or []):
-        st = parse_iso_datetime(ev.get("start"))
-        en = parse_iso_datetime(ev.get("end"))
-        if st:
-            starts.append(st)
-        if en:
-            ends.append(en)
-    if not starts or not ends:
-        return None, None
-    return min(starts), max(ends)
-
-
-def room_target_matches_event(entry: dict, ev: dict, promo: str) -> bool:
-    """Teste si une entrée salle Opus s'applique à un événement interne."""
-    if entry.get("promo") != promo:
-        return False
-
-    subgroup = entry.get("subgroup")
-    if not subgroup:
-        return True
-
-    raw_groups = ev.get("groups") or []
-    if isinstance(raw_groups, str):
-        raw_groups = [raw_groups]
-    normalized_groups = {normalize_group_label(g) for g in raw_groups if normalize_group_label(g)}
-    return subgroup in normalized_groups
-
-
-def intervals_are_compatible(opus_start: datetime, opus_end: datetime, event_start: datetime, event_end: datetime) -> bool:
-    """
-    Vérifie la compatibilité horaire entre Opus et le calendrier interne.
-
-    Le rapprochement exact était trop strict : Opus regroupe parfois une séance
-    08:30-12:30 alors que le calendrier interne a deux séances 08:30-10:30 et
-    10:30-12:30. On accepte donc les cas où un intervalle contient l'autre.
-    Les chevauchements simplement partiels ne sont pas acceptés, afin d'éviter
-    d'injecter une salle sur une séance voisine.
-    """
-    if not (opus_start and opus_end and event_start and event_end):
-        return False
-    if opus_start.date() != event_start.date():
-        return False
-
-    # Tolérance légère pour absorber les arrondis/minutes recomposées depuis le PDF.
-    tolerance = pd.Timedelta(minutes=1).to_pytimedelta()
-
-    event_inside_opus = (opus_start - tolerance) <= event_start and event_end <= (opus_end + tolerance)
-    opus_inside_event = (event_start - tolerance) <= opus_start and opus_end <= (event_end + tolerance)
-    return event_inside_opus or opus_inside_event
-
-
-def calendar_range_overlaps(entry_start: datetime, entry_end: datetime, cal_start: datetime, cal_end: datetime) -> bool:
-    """Vrai si l'entrée Opus touche la période couverte par le calendrier."""
-    if not (entry_start and entry_end and cal_start and cal_end):
-        return False
-    return entry_end >= cal_start and entry_start <= cal_end
-
-
-def inject_rooms_into_events(events_p1: List[dict], events_p2: List[dict], room_entries: List[dict]) -> dict:
-    """
-    Injecte/écrase les salles dans les événements existants.
-
-    Règles de rapprochement :
-      - même promo/groupe ;
-      - même date ;
-      - intervalle horaire exact OU intervalle Opus qui englobe la séance interne
-        OU séance interne qui englobe l'intervalle Opus.
-
-    Cela corrige les cas où Opus regroupe des créneaux de 4 h alors que le
-    calendrier interne les découpe en deux créneaux de 2 h.
-    """
-    cal_start, cal_end = calendar_bounds(events_p1, events_p2)
-    if not cal_start or not cal_end:
-        return {
-            "events_p1": events_p1 or [],
-            "events_p2": events_p2 or [],
-            "parsed_rooms": len(room_entries or []),
-            "usable_rooms": 0,
-            "matched_events": 0,
-            "unmatched_rooms": len(room_entries or []),
-        }
-
-    usable_entries = [
-        e for e in (room_entries or [])
-        if e.get("start") and e.get("end") and calendar_range_overlaps(e["start"], e["end"], cal_start, cal_end)
-    ]
-
-    entry_used = [False] * len(usable_entries)
-
-    def update_list(events: List[dict], promo: str) -> Tuple[List[dict], int]:
-        updated = []
-        matched_count = 0
-        for ev in events or []:
-            ev_copy = dict(ev)
-            # Une injection Opus est une mise à jour des salles : on retire la salle
-            # précédente puis on la remet seulement si le PDF contient un match.
-            ev_copy.pop("room", None)
-
-            st = parse_iso_datetime(ev_copy.get("start"))
-            en = parse_iso_datetime(ev_copy.get("end"))
-            if not st or not en:
-                updated.append(ev_copy)
-                continue
-
-            rooms = []
-            for idx, entry in enumerate(usable_entries):
-                if (
-                    intervals_are_compatible(entry.get("start"), entry.get("end"), st, en)
-                    and room_target_matches_event(entry, ev_copy, promo)
-                ):
-                    if entry.get("room"):
-                        rooms.append(entry["room"])
-                        entry_used[idx] = True
-
-            unique_rooms = list(dict.fromkeys(rooms))
-            if unique_rooms:
-                ev_copy["room"] = " / ".join(unique_rooms)
-                matched_count += 1
-            updated.append(ev_copy)
-        return updated, matched_count
-
-    new_p1, matched_p1 = update_list(events_p1 or [], "p1")
-    new_p2, matched_p2 = update_list(events_p2 or [], "p2")
-
-    return {
-        "events_p1": new_p1,
-        "events_p2": new_p2,
-        "parsed_rooms": len(room_entries or []),
-        "usable_rooms": len(usable_entries),
-        "matched_events": matched_p1 + matched_p2,
-        "unmatched_rooms": sum(1 for used in entry_used if not used),
-        "calendar_start": cal_start.isoformat(),
-        "calendar_end": cal_end.isoformat(),
-    }
 
 
 # ==========================================
@@ -1048,7 +572,7 @@ def build_paris_vtimezone_text():
     ])
 
 
-def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
+def events_to_ics_string(events: List[dict], tzname='Europe/Paris', uid_namespace: str = 'edt') -> str:
     tz = pytz.timezone(tzname)
 
     header = [
@@ -1061,7 +585,8 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
     body = [build_paris_vtimezone_text()]
 
     for ev in events:
-        uid = str(uuid.uuid4())
+        uid_source = '|'.join([uid_namespace, str(ev.get('start','')), str(ev.get('end','')), str(ev.get('summary','')), ','.join(ev.get('groups',[]) or [])])
+        uid = hashlib.sha256(uid_source.encode('utf-8')).hexdigest() + '@cesi-edt'
 
         try:
             start_dt = datetime.fromisoformat(ev['start'])
@@ -1085,10 +610,6 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
         summary = escape_ical_text(ev['summary'])
 
         desc_lines = []
-        room = ev.get('room') or ev.get('location') or ""
-        if room:
-            desc_lines.append('Salle: ' + str(room))
-
         if ev.get('description'):
             desc_lines.append(ev['description'])
 
@@ -1104,23 +625,17 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris') -> str:
                 desc_lines.append('Groupes: ' + ' et '.join(groups))
 
         description = escape_ical_text('\n'.join(desc_lines))
-        location = escape_ical_text(room)
 
-        event_lines = [
+        body.extend([
             'BEGIN:VEVENT',
             f'UID:{uid}',
             f'DTSTAMP:{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}',
             f'DTSTART;TZID={tzname}:{dtstart}',
             f'DTEND;TZID={tzname}:{dtend}',
             f'SUMMARY:{summary}',
-        ]
-        if location:
-            event_lines.append(f'LOCATION:{location}')
-        event_lines.extend([
             f'DESCRIPTION:{description}',
             'END:VEVENT'
         ])
-        body.extend(event_lines)
 
     footer = ['END:VCALENDAR']
     return '\n'.join(header + body + footer)
@@ -1288,59 +803,7 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
 
-
     return RedirectResponse("/", status_code=303)
-
-
-@app.post("/inject-rooms/{slug}")
-async def inject_rooms_from_opus(slug: str, request: Request, file: UploadFile = File(...)):
-    """Ajoute/met à jour les salles depuis un PDF Opus/FNG sans modifier les séances."""
-    if not get_current_user(request):
-        return RedirectResponse("/login")
-
-    filename = (file.filename or "").lower()
-    if filename and not filename.endswith(".pdf"):
-        return RedirectResponse("/?error=rooms_bad_file", status_code=303)
-
-    try:
-        content = await file.read()
-        if not content:
-            return RedirectResponse("/?error=rooms_empty_file", status_code=303)
-
-        res = supabase.table("plannings").select("events_p1, events_p2").ilike("slug", slug).execute()
-        if not res.data:
-            raise HTTPException(404, detail="Planning introuvable")
-
-        current = res.data[0]
-        events_p1 = current.get("events_p1", []) or []
-        events_p2 = current.get("events_p2", []) or []
-
-        room_entries = parse_opus_pdf_rooms(content)
-        inject_result = inject_rooms_into_events(events_p1, events_p2, room_entries)
-
-        supabase.table("plannings").update({
-            "events_p1": inject_result["events_p1"],
-            "events_p2": inject_result["events_p2"],
-            "updated_at": datetime.now(PARIS_TZ).isoformat()
-        }).eq("slug", slug).execute()
-
-        log_msg(
-            f"Salles Opus pour {slug}: PDF={inject_result['parsed_rooms']}, "
-            f"dans période={inject_result['usable_rooms']}, "
-            f"événements maj={inject_result['matched_events']}, "
-            f"non rapprochées={inject_result['unmatched_rooms']}"
-        )
-
-        return RedirectResponse(
-            f"/?success=rooms&rooms_matched={inject_result['matched_events']}&rooms_pdf={inject_result['usable_rooms']}&rooms_unmatched={inject_result['unmatched_rooms']}",
-            status_code=303
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_msg(f"Erreur injection salles Opus: {e}")
-        return RedirectResponse("/?error=rooms", status_code=303)
 
 
 # --- URL PUBLIQUE POUR OUTLOOK ---
@@ -1369,6 +832,34 @@ async def get_ics_file(slug: str, group: str):
         raise
     except Exception as e:
         log_msg(f"Erreur ICS generation: {e}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.get("/ics/{slug}/enseignant.ics")
+async def get_teacher_ics_file(slug: str, teacher: str):
+    """Flux ICS public et stable d'un enseignant, utilisable en abonnement calendrier."""
+    try:
+        res = supabase.table("plannings").select("events_p1, events_p2, teachers_data").ilike("slug", slug).execute()
+        if not res.data:
+            raise HTTPException(404, detail="Planning introuvable")
+
+        data = res.data[0]
+        known_teachers = {str(t.get("name", "")).strip() for t in (data.get("teachers_data") or [])}
+        all_events = (data.get("events_p1") or []) + (data.get("events_p2") or [])
+        events = [ev for ev in all_events if teacher in (ev.get("teachers") or [])]
+        if teacher not in known_teachers and not events:
+            raise HTTPException(404, detail="Enseignant introuvable")
+
+        ics_content = events_to_ics_string(events, uid_namespace=f"{slug}:teacher:{teacher}")
+        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", teacher).strip("_") or "enseignant"
+        return Response(content=ics_content, media_type="text/calendar; charset=utf-8", headers={
+            "Content-Disposition": f'inline; filename="Planning_{safe_name}.ics"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Erreur ICS enseignant: {e}")
         raise HTTPException(500, detail="Erreur interne")
 
 
@@ -1404,124 +895,6 @@ async def view_dashboard(slug: str, request: Request):
         "planning_year": p.get("year", ""),
         "user": user,
     })
-
-
-# --- VUE PLANIFICATEUR (protégée) ---
-
-@app.get("/planifier/{slug}", response_class=HTMLResponse)
-async def view_planner(slug: str, request: Request):
-    """Page d'édition directe du planning."""
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
-
-    res = supabase.table("plannings").select("slug, name, year").ilike("slug", slug).execute()
-    if not res.data:
-        raise HTTPException(404, detail="Planning introuvable")
-
-    p = res.data[0]
-    return templates.TemplateResponse(request, "planner.html", {
-        "slug": p["slug"],
-        "planning_name": p.get("name") or p["slug"],
-        "planning_year": p.get("year", ""),
-        "user": user,
-    })
-
-
-# --- APIS JSON POUR LE PLANIFICATEUR ---
-
-def require_authenticated_user_for_api(request: Request) -> str:
-    """Retourne l'utilisateur courant ou lève une 401 pour les appels fetch()."""
-    user = get_current_user(request)
-    if not user:
-        raise HTTPException(401, detail="Authentification requise")
-    return user
-
-
-@app.get("/api/planner-data/{slug}")
-async def api_planner_data(slug: str, request: Request):
-    """Retourne toutes les données nécessaires à planner.html."""
-    require_authenticated_user_for_api(request)
-    try:
-        res = supabase.table("plannings").select(
-            "slug, name, year, events_p1, events_p2, maquette_data, teachers_data"
-        ).ilike("slug", slug).execute()
-        if not res.data:
-            raise HTTPException(404, detail="Planning introuvable")
-
-        d = res.data[0]
-        return {
-            "slug": d.get("slug"),
-            "name": d.get("name"),
-            "year": d.get("year"),
-            "events_p1": d.get("events_p1", []) or [],
-            "events_p2": d.get("events_p2", []) or [],
-            "maquette_data": d.get("maquette_data", []) or [],
-            "teachers_data": d.get("teachers_data", []) or [],
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_msg(f"Erreur API planner-data: {e}")
-        raise HTTPException(500, detail="Erreur interne")
-
-
-@app.post("/api/planner-save/{slug}")
-async def api_planner_save(slug: str, request: Request):
-    """
-    Enregistre les modifications faites depuis la page Planifier.
-
-    Le payload peut contenir un ou plusieurs champs parmi :
-      - events_p1
-      - events_p2
-      - maquette_data
-      - teachers_data
-
-    Les champs absents ne sont pas modifiés. Aucun changement de schéma SQL n'est
-    nécessaire : tout reste stocké dans les colonnes JSONB existantes.
-    """
-    require_authenticated_user_for_api(request)
-
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(400, detail="JSON invalide")
-
-    if not isinstance(payload, dict):
-        raise HTTPException(400, detail="Le payload doit être un objet JSON")
-
-    allowed_fields = {"events_p1", "events_p2", "maquette_data", "teachers_data"}
-    update_data = {}
-
-    for field in allowed_fields:
-        if field in payload:
-            if not isinstance(payload[field], list):
-                raise HTTPException(422, detail=f"{field} doit être une liste")
-            update_data[field] = payload[field]
-
-    if not update_data:
-        raise HTTPException(400, detail="Aucun champ modifiable fourni")
-
-    try:
-        # Récupère d'abord le slug réel pour rester compatible avec les recherches ilike.
-        existing = supabase.table("plannings").select("slug").ilike("slug", slug).execute()
-        if not existing.data:
-            raise HTTPException(404, detail="Planning introuvable")
-        real_slug = existing.data[0]["slug"]
-
-        update_data["updated_at"] = datetime.now(PARIS_TZ).isoformat()
-        supabase.table("plannings").update(update_data).eq("slug", real_slug).execute()
-
-        log_msg(
-            f"Planificateur sauvegardé pour {real_slug}: "
-            + ", ".join(sorted(k for k in update_data.keys() if k != "updated_at"))
-        )
-        return {"ok": True, "updated_fields": sorted(k for k in update_data.keys() if k != "updated_at")}
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_msg(f"Erreur API planner-save: {e}")
-        raise HTTPException(500, detail="Erreur interne")
 
 
 # --- APIS JSON ---
