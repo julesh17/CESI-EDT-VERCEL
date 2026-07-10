@@ -1862,6 +1862,209 @@ async def view_dashboard(slug: str, request: Request):
     })
 
 
+# --- VUE PLANIFICATEUR (protégée) ---
+
+@app.get("/planifier/{slug}", response_class=HTMLResponse)
+async def view_planner(slug: str, request: Request):
+    """Page d'édition directe du planning."""
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        res = (
+            supabase.table("plannings")
+            .select("slug, name, year")
+            .ilike("slug", slug)
+            .execute()
+        )
+
+        if not res.data:
+            raise HTTPException(404, detail="Planning introuvable")
+
+        planning = res.data[0]
+
+        return templates.TemplateResponse(request, "planner.html", {
+            "slug": planning["slug"],
+            "planning_name": planning.get("name") or planning["slug"],
+            "planning_year": planning.get("year", ""),
+            "user": user,
+        })
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_msg(f"Erreur vue planificateur: {exc}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+# --- APIS JSON POUR LE PLANIFICATEUR ---
+
+def require_authenticated_user_for_api(request: Request) -> str:
+    """
+    Retourne l'utilisateur courant ou lève une erreur 401.
+
+    Les appels JavaScript fetch() doivent recevoir du JSON plutôt qu'une
+    redirection HTML vers la page de connexion.
+    """
+    user = get_current_user(request)
+
+    if not user:
+        raise HTTPException(
+            401,
+            detail="Authentification requise",
+        )
+
+    return user
+
+
+@app.get("/api/planner-data/{slug}")
+async def api_planner_data(slug: str, request: Request):
+    """Retourne toutes les données nécessaires à planner.html."""
+    require_authenticated_user_for_api(request)
+
+    try:
+        res = (
+            supabase.table("plannings")
+            .select(
+                "slug, name, year, "
+                "events_p1, events_p2, "
+                "maquette_data, teachers_data"
+            )
+            .ilike("slug", slug)
+            .execute()
+        )
+
+        if not res.data:
+            raise HTTPException(
+                404,
+                detail="Planning introuvable",
+            )
+
+        data = res.data[0]
+
+        return {
+            "slug": data.get("slug"),
+            "name": data.get("name"),
+            "year": data.get("year"),
+            "events_p1": data.get("events_p1", []) or [],
+            "events_p2": data.get("events_p2", []) or [],
+            "maquette_data": data.get("maquette_data", []) or [],
+            "teachers_data": data.get("teachers_data", []) or [],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_msg(f"Erreur API planner-data: {exc}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
+@app.post("/api/planner-save/{slug}")
+async def api_planner_save(slug: str, request: Request):
+    """
+    Enregistre les modifications effectuées depuis la page Planifier.
+
+    Le corps JSON peut contenir un ou plusieurs champs parmi :
+      - events_p1
+      - events_p2
+      - maquette_data
+      - teachers_data
+
+    Les champs absents ne sont pas modifiés.
+    """
+    require_authenticated_user_for_api(request)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            400,
+            detail="JSON invalide",
+        )
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            400,
+            detail="Le payload doit être un objet JSON",
+        )
+
+    allowed_fields = {
+        "events_p1",
+        "events_p2",
+        "maquette_data",
+        "teachers_data",
+    }
+
+    update_data = {}
+
+    for field in allowed_fields:
+        if field not in payload:
+            continue
+
+        if not isinstance(payload[field], list):
+            raise HTTPException(
+                422,
+                detail=f"{field} doit être une liste",
+            )
+
+        update_data[field] = payload[field]
+
+    if not update_data:
+        raise HTTPException(
+            400,
+            detail="Aucun champ modifiable fourni",
+        )
+
+    try:
+        # Retrouver le slug avec une recherche insensible à la casse, puis
+        # effectuer l'UPDATE avec le slug exact enregistré en base.
+        existing = (
+            supabase.table("plannings")
+            .select("slug")
+            .ilike("slug", slug)
+            .execute()
+        )
+
+        if not existing.data:
+            raise HTTPException(
+                404,
+                detail="Planning introuvable",
+            )
+
+        real_slug = existing.data[0]["slug"]
+        update_data["updated_at"] = datetime.now(PARIS_TZ).isoformat()
+
+        (
+            supabase.table("plannings")
+            .update(update_data)
+            .eq("slug", real_slug)
+            .execute()
+        )
+
+        updated_fields = sorted(
+            key
+            for key in update_data
+            if key != "updated_at"
+        )
+
+        log_msg(
+            f"Planificateur sauvegardé pour {real_slug}: "
+            + ", ".join(updated_fields)
+        )
+
+        return {
+            "ok": True,
+            "updated_fields": updated_fields,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_msg(f"Erreur API planner-save: {exc}")
+        raise HTTPException(500, detail="Erreur interne")
+
+
 # --- APIS JSON ---
 
 @app.get("/api/events/{slug}/{group}")
