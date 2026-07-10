@@ -342,6 +342,193 @@ def parse_sheet_to_events_json(file_content: bytes, sheet_name: str) -> List[dic
 
 
 # ==========================================
+# 2a. CONSERVATION DES SALLES ENTRE IMPORTS
+# ==========================================
+
+def normalize_event_datetime(value):
+    """
+    Normalise une date/heure d'événement à la minute, en heure de Paris.
+
+    Cela permet de faire correspondre :
+      - les dates ISO naïves produites par l'import Excel ;
+      - les dates ISO avec fuseau éventuellement produites par l'import PDF.
+    """
+    if value is None:
+        return None
+
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            raw = str(value).strip()
+            if not raw:
+                return None
+
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                dt = dtparser.parse(raw, dayfirst=True)
+
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(PARIS_TZ).replace(tzinfo=None)
+
+        # Les secondes ne sont pas pertinentes pour un créneau de cours.
+        return dt.replace(second=0, microsecond=0).isoformat(timespec="minutes")
+    except Exception:
+        return None
+
+
+def normalized_event_groups(event: dict) -> List[str]:
+    """
+    Retourne les groupes normalisés d'un événement.
+
+    Accepte aussi bien :
+      {"groups": ["G 1", "G.2"]}
+    que :
+      {"group": "G1"}
+    """
+    raw_groups = event.get("groups")
+
+    if raw_groups is None or raw_groups == [] or raw_groups == "":
+        raw_groups = event.get("group")
+
+    if raw_groups is None:
+        return []
+
+    if not isinstance(raw_groups, (list, tuple, set)):
+        raw_groups = [raw_groups]
+
+    groups = set()
+
+    for raw_group in raw_groups:
+        if raw_group is None:
+            continue
+
+        text = str(raw_group).strip()
+        if not text:
+            continue
+
+        # Un même champ peut éventuellement contenir plusieurs groupes.
+        matches = re.findall(r"G\s*\.?\s*(\d+)", text, re.I)
+        if matches:
+            groups.update(f"G {int(number)}" for number in matches)
+            continue
+
+        normalized = normalize_group_label(text)
+        if normalized:
+            # Pour les groupes non numériques, neutraliser les différences
+            # de casse et d'espaces.
+            groups.add(re.sub(r"\s+", " ", normalized).strip().upper())
+
+    return sorted(groups)
+
+
+def get_event_room(event: dict):
+    """
+    Lit uniquement l'information de salle.
+    Les autres données de l'ancien événement ne sont jamais réutilisées.
+    """
+    room = event.get("room") or event.get("location")
+    if room is None:
+        return None
+
+    room = str(room).strip()
+    return room or None
+
+
+def preserve_rooms_from_existing_events(
+    new_events: List[dict],
+    existing_events: List[dict],
+    promo_label: str = ""
+) -> List[dict]:
+    """
+    Réinjecte dans les événements issus du nouvel Excel les salles déjà
+    enregistrées par l'import PDF.
+
+    Une salle est transférée uniquement si les quatre informations concordent :
+      - groupe ;
+      - date et heure de début ;
+      - date et heure de fin.
+
+    Le nom de la matière et les enseignants sont volontairement ignorés.
+    Les anciens événements sans salle sont également ignorés.
+    """
+    room_index = {}
+
+    # Indexer seulement les anciens événements qui possèdent réellement une salle.
+    for old_event in existing_events or []:
+        room = get_event_room(old_event)
+        if not room:
+            continue
+
+        start_key = normalize_event_datetime(old_event.get("start"))
+        end_key = normalize_event_datetime(old_event.get("end"))
+        groups = normalized_event_groups(old_event)
+
+        if not start_key or not end_key or not groups:
+            continue
+
+        for group in groups:
+            key = (group, start_key, end_key)
+            # Dictionnaire indexé par casefold pour éviter les doublons
+            # du type "A101" / "a101", tout en conservant l'écriture d'origine.
+            room_index.setdefault(key, {})[room.casefold()] = room
+
+    merged_events = []
+    restored_count = 0
+    ambiguous_count = 0
+
+    for event in new_events or []:
+        merged_event = dict(event)
+
+        # Si une future version de l'Excel fournit déjà une salle,
+        # elle reste prioritaire.
+        if get_event_room(merged_event):
+            merged_events.append(merged_event)
+            continue
+
+        start_key = normalize_event_datetime(merged_event.get("start"))
+        end_key = normalize_event_datetime(merged_event.get("end"))
+
+        matched_rooms = {}
+
+        if start_key and end_key:
+            for group in normalized_event_groups(merged_event):
+                for room_key, room_value in room_index.get(
+                    (group, start_key, end_key), {}
+                ).items():
+                    matched_rooms[room_key] = room_value
+
+        if matched_rooms:
+            rooms = sorted(matched_rooms.values(), key=str.casefold)
+            merged_event["room"] = " / ".join(rooms)
+            restored_count += 1
+
+            if len(rooms) > 1:
+                ambiguous_count += 1
+
+        merged_events.append(merged_event)
+
+    suffix = f" ({promo_label})" if promo_label else ""
+    log_msg(
+        f"Salles conservées{suffix}: {restored_count} séance(s)"
+        + (
+            f", dont {ambiguous_count} avec plusieurs salles"
+            if ambiguous_count
+            else ""
+        )
+    )
+
+    return merged_events
+
+
+# ==========================================
 # 2b. PARSING MAQUETTE
 # ==========================================
 
@@ -800,6 +987,30 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     log_msg(f"Début upload pour {slug}")
     content = await file.read()
 
+    # Charger les événements actuellement enregistrés AVANT de remplacer
+    # les données par celles du nouvel Excel. Cette lecture est bloquante :
+    # en cas d'échec, on n'écrase rien afin de ne pas perdre les salles.
+    try:
+        existing_res = (
+            supabase.table("plannings")
+            .select("events_p1, events_p2")
+            .eq("slug", slug)
+            .execute()
+        )
+
+        if not existing_res.data:
+            raise HTTPException(404, detail="Planning introuvable")
+
+        existing_planning = existing_res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg(f"Impossible de charger les salles existantes: {e}")
+        raise HTTPException(
+            500,
+            detail="Import annulé : impossible de préserver les salles existantes."
+        )
+
     try:
         xls = pd.ExcelFile(io.BytesIO(content))
         log_msg(f"Feuilles disponibles: {xls.sheet_names}")
@@ -811,7 +1022,23 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
     maquette_data = parse_maquette_sheet(content)
     teachers_data = parse_teachers_sheet(content)
 
-    log_msg(f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}, Maquette: {len(maquette_data)}, Enseignants: {len(teachers_data)}")
+    # Réappliquer uniquement les salles issues de l'ancienne version.
+    # Matière et enseignants ne participent jamais à la correspondance.
+    events_p1 = preserve_rooms_from_existing_events(
+        events_p1,
+        existing_planning.get("events_p1", []) or [],
+        promo_label="P1"
+    )
+    events_p2 = preserve_rooms_from_existing_events(
+        events_p2,
+        existing_planning.get("events_p2", []) or [],
+        promo_label="P2"
+    )
+
+    log_msg(
+        f"Events trouvés - P1: {len(events_p1)}, P2: {len(events_p2)}, "
+        f"Maquette: {len(maquette_data)}, Enseignants: {len(teachers_data)}"
+    )
 
     try:
         supabase.table("plannings").update({
@@ -823,6 +1050,7 @@ async def upload_excel(slug: str, request: Request, file: UploadFile = File(...)
         }).eq("slug", slug).execute()
     except Exception as e:
         log_msg(f"Erreur mise à jour BDD: {e}")
+        raise HTTPException(500, detail="Erreur lors de la mise à jour du planning.")
 
     return RedirectResponse("/", status_code=303)
 
