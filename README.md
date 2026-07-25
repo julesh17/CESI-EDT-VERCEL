@@ -1,34 +1,174 @@
-# EDT CESI - Plateforme de diffusion et de pilotage de planning 
+# CESI-EDT
 
-## Présentation
-EDT CESI est une solution métier conçue pour simplifier la diffusion et le pilotage des emplois du temps au sein de l'établissement. À partir des extractions Excel standards, l'application génère des flux de données au format **iCalendar (.ics)** et offre un tableau de bord qui permet d'automatiser certaines taches.
+Plateforme web de gestion des emplois du temps développée pour CESI.
 
-Cet outil permet aux Enseignants Responsables Pédagogiques (ERP) de garantir que les intervenants, enseignants et partenaires disposent d'une visibilité en temps réel sur les plannings, directement intégrée dans leurs outils de travail (Outlook, Teams, Google Calendar, Apple Calendar).
+CESI-EDT permet aux **Enseignants Responsables Pédagogiques (ERP)** de gérer les emplois du temps des promotions, de diffuser les calendriers aux enseignants et aux étudiants, ainsi que de suivre différents indicateurs liés à la planification.
 
-## Fonctionnalités Clés
-* **Synchronisation Automatique** : Toute mise à jour du fichier Excel sur la plateforme est instantanément répercutée sur les calendriers des abonnés.
-* **Interopérabilité** : Compatibilité totale avec tous les clients de messagerie supportant le protocole iCalendar.
-* **Segmentation par Groupe** : Génération distincte de flux pour les groupes P1 et P2 afin de garantir une information ciblée.
-* **Historisation** : Suivi en temps réel de la date et de l'heure de la dernière mise à jour pour chaque promotion.
-
-## Guide d'Utilisation pour l'ERP
-
-### 1. Création d'un espace Promotion
-Pour chaque nouvelle promotion ou cycle, créez un groupe de calendriers dédié en renseignant le nom de la promotion (ex: FISA 2026) et l'année académique.
-
-### 2. Mise à jour des données
-* Sélectionnez la promotion correspondante dans votre tableau de bord.
-* Téléversez le fichier Excel d'origine du CESI. Le système traitera automatiquement les cours, intervenants et salles.
-* Une fois l'importation terminée, la date de mise à jour est actualisée.
-
-### 3. Diffusion des flux
-Chaque groupe dispose d'un lien permanent unique. 
-* **Action** : Copiez le lien ICS généré depuis l'interface.
-* **Diffusion** : Transmettez ce lien aux intervenants. Il leur suffit de l'ajouter comme "Nouveau calendrier à partir d'un lien" dans leur logiciel habituel pour être abonnés aux changements.
-
-## Accès à la plateforme
-L'outil est accessible en ligne à l'adresse suivante :  
-👉 **[https://cesi-edt.vercel.app/](https://cesi-edt.vercel.app/)**
+Les **enseignants** et les **étudiants** utilisent la plateforme pour consulter leur emploi du temps et s'abonner à leur calendrier personnel.
 
 ---
-**Note de confidentialité** : Les données traitées sont exclusivement utilisées pour la génération du planning et restent confinées à l'infrastructure sécurisée de l'application.
+
+## Accès à la plateforme
+
+La plateforme est accessible à l'adresse suivante :
+
+👉 https://cesi-edt.vercel.app/
+
+Aucune installation n'est nécessaire. Un navigateur web récent suffit.
+
+---
+
+## Fonctionnalités
+
+### Pour les ERP
+
+- Gestion des promotions
+- Import des emplois du temps
+- Import des salles depuis les documents FNG
+- Consultation et modification des plannings
+- Gestion des examens
+- Suivi des volumes horaires
+- Génération des calendriers ICS
+- Export des données
+- Tableaux de bord et statistiques
+
+### Pour les enseignants
+
+- Consultation de leur emploi du temps
+- Recherche rapide des séances
+- Abonnement à leur calendrier (ICS)
+
+### Pour les étudiants
+
+- Consultation de l'emploi du temps de leur promotion
+- Abonnement au calendrier (ICS)
+
+---
+
+# Guide d'utilisation pour l'ERP
+
+## 1. Création d'une promotion
+
+Créer une nouvelle promotion en renseignant les informations demandées (nom de la promotion, année académique, cycle, etc.).
+
+Cette promotion servira de conteneur pour l'ensemble des données de planification.
+
+---
+
+## 2. Import de l'emploi du temps
+
+Accéder au module **Import des emplois du temps**.
+
+Importer le fichier Excel fourni par le service de planification.
+
+Une fois l'import terminé, vérifier que toutes les séances ont bien été créées.
+
+---
+
+## 3. Import des salles
+
+Ouvrir le module **Import des salles**.
+
+Importer les fichiers PDF FNG contenant les affectations des salles.
+
+La plateforme extrait automatiquement les salles et les associe aux séances correspondantes.
+
+---
+
+## 4. Vérification des données
+
+Contrôler les informations importées :
+
+- enseignants ;
+- groupes ;
+- salles ;
+- horaires ;
+- matières.
+
+Corriger les éventuelles anomalies avant publication.
+
+---
+
+## 5. Consultation de l'emploi du temps
+
+Utiliser les différents filtres pour afficher :
+
+- une promotion ;
+- un groupe ;
+- un enseignant ;
+- une salle.
+
+Les modifications sont immédiatement visibles.
+
+---
+
+## 6. Gestion des examens
+
+Accéder au module **Examens**.
+
+Créer ou modifier les examens.
+
+Vérifier l'absence de conflits de salles, d'horaires ou d'enseignants.
+
+---
+
+## 7. Suivi des heures
+
+Le tableau de bord permet de consulter :
+
+- les heures prévues ;
+- les heures réalisées ;
+- les écarts éventuels.
+
+Ces informations peuvent être filtrées par enseignant ou par promotion.
+
+---
+
+## 8. Diffusion des calendriers
+
+Une fois les vérifications terminées, récupérer les liens d'abonnement ICS.
+
+Chaque enseignant et chaque promotion disposent de leur propre calendrier.
+
+Les utilisateurs peuvent ensuite s'abonner à leur calendrier depuis Outlook, Google Calendar, Apple Calendar ou toute autre application compatible.
+
+---
+
+## 9. Export des données
+
+La plateforme permet d'exporter différents éléments :
+
+- calendriers ICS ;
+- tableaux récapitulatifs ;
+- statistiques.
+
+---
+
+## Bonnes pratiques
+
+Avant chaque diffusion :
+
+- vérifier les salles ;
+- contrôler les enseignants affectés ;
+- s'assurer de l'absence de conflits ;
+- vérifier les volumes horaires ;
+- tester les liens d'abonnement ICS.
+
+---
+
+## Technologies
+
+- Python
+- Streamlit
+- Pandas
+- OpenPyXL
+- iCalendar (ICS)
+- PDFPlumber
+- Supabase
+- Vercel
+
+---
+
+## Auteur
+
+Projet développé pour les équipes pédagogiques de CESI afin de simplifier la gestion des emplois du temps et la diffusion des calendriers.
