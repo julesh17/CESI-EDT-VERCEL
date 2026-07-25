@@ -1,7 +1,7 @@
-# EDT CESI - Plateforme de Diffusion de Planning Dynamique
+# EDT CESI - Plateforme de diffusion et de pilotage de planning 
 
 ## Présentation
-EDT CESI est une solution métier conçue pour simplifier la diffusion des emplois du temps au sein de l'établissement. À partir des extractions Excel standards, l'application génère des flux de données au format **iCalendar (.ics)**.
+EDT CESI est une solution métier conçue pour simplifier la diffusion et le pilotage des emplois du temps au sein de l'établissement. À partir des extractions Excel standards, l'application génère des flux de données au format **iCalendar (.ics)** et offre un tableau de bord qui permet d'automatiser certaines taches.
 
 Cet outil permet aux Enseignants Responsables Pédagogiques (ERP) de garantir que les intervenants, enseignants et partenaires disposent d'une visibilité en temps réel sur les plannings, directement intégrée dans leurs outils de travail (Outlook, Teams, Google Calendar, Apple Calendar).
 
