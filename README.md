@@ -59,7 +59,7 @@ Cette promotion servira de conteneur pour l'ensemble des données de planificati
 
 Accéder au module **Import des emplois du temps**.
 
-Importer le fichier Excel fourni par le service de planification.
+Importer le fichier Excel, l'emploi du temps normalisé rempli.
 
 Une fois l'import terminé, vérifier que toutes les séances ont bien été créées.
 
@@ -69,23 +69,9 @@ Une fois l'import terminé, vérifier que toutes les séances ont bien été cr�
 
 Ouvrir le module **Import des salles**.
 
-Importer les fichiers PDF FNG contenant les affectations des salles.
+Importer les fichiers PDF issus de FNG contenant les affectations des salles.
 
 La plateforme extrait automatiquement les salles et les associe aux séances correspondantes.
-
----
-
-## 4. Vérification des données
-
-Contrôler les informations importées :
-
-- enseignants ;
-- groupes ;
-- salles ;
-- horaires ;
-- matières.
-
-Corriger les éventuelles anomalies avant publication.
 
 ---
 
@@ -171,4 +157,4 @@ Avant chaque diffusion :
 
 ## Auteur
 
-Projet développé pour les équipes pédagogiques de CESI afin de simplifier la gestion des emplois du temps et la diffusion des calendriers.
+Projet développé par Jules Hamdan, ERP à CESI Toulouse, pour les équipes pédagogiques de CESI afin de simplifier la gestion des emplois du temps et la diffusion des calendriers.
