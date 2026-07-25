@@ -1,3 +1,8 @@
+
+<p align="center">
+<img src="readme-assets/hello.png" width="400">
+</p>
+
 # CESI-EDT
 
 Plateforme web de gestion des emplois du temps développée pour CESI.
@@ -15,6 +20,10 @@ La plateforme est accessible à l'adresse suivante :
 👉 https://cesi-edt.vercel.app/
 
 Aucune installation n'est nécessaire. Un navigateur web récent suffit.
+
+<p align="center">
+<img src="readme-assets/cesi-edt-readme.002.png" width="800">
+</p>
 
 ---
 
@@ -118,6 +127,10 @@ Chaque enseignant et chaque promotion disposent de leur propre calendrier.
 
 Les utilisateurs peuvent ensuite s'abonner à leur calendrier depuis Outlook, Google Calendar, Apple Calendar ou toute autre application compatible.
 
+<p align="center">
+<img src="readme-assets/cesi-edt-readme.001.png" width="800">
+</p>
+
 ---
 
 ## 9. Export des données
@@ -127,18 +140,6 @@ La plateforme permet d'exporter différents éléments :
 - calendriers ICS ;
 - tableaux récapitulatifs ;
 - statistiques.
-
----
-
-## Bonnes pratiques
-
-Avant chaque diffusion :
-
-- vérifier les salles ;
-- contrôler les enseignants affectés ;
-- s'assurer de l'absence de conflits ;
-- vérifier les volumes horaires ;
-- tester les liens d'abonnement ICS.
 
 ---
 
