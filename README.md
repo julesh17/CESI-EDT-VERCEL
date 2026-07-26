@@ -146,7 +146,6 @@ La plateforme permet d'exporter différents éléments :
 ## Technologies
 
 - Python
-- Streamlit
 - Pandas
 - OpenPyXL
 - iCalendar (ICS)
