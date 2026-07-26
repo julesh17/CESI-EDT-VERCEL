@@ -143,8 +143,6 @@ La plateforme permet d'exporter différents éléments :
 
 ---
 
----
-
 # Architecture technique
 
 CESI-EDT est une application web développée principalement en **Python**.
