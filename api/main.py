@@ -1423,7 +1423,7 @@ def events_to_ics_string(events: List[dict], tzname='Europe/Paris', uid_namespac
         title_parts.extend(groups)
         raw_summary = str(ev.get('summary') or '')
         if title_parts:
-            raw_summary = f"[{' · '.join(title_parts)}] {raw_summary}"
+            raw_summary = f"{raw_summary} [{' · '.join(title_parts)}]"
         summary = escape_ical_text(raw_summary)
 
         desc_lines = []
